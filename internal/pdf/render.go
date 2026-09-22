@@ -33,6 +33,13 @@ func Render(path string, maxPages int) (pages []string, cleanup func(), err erro
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), renderTimeout)
 	defer cancel()
+	// Detect a renderer first so a missing install reports the actionable
+	// error even when the document would also fail the page limit.
+	pdftoppm, errPDFTOPPM := exec.LookPath("pdftoppm")
+	mutool, errMUTOOL := exec.LookPath("mutool")
+	if errPDFTOPPM != nil && errMUTOOL != nil {
+		return nil, nil, fmt.Errorf("render PDF: neither pdftoppm nor mutool is installed (install Poppler or MuPDF)")
+	}
 	if maxPages > 0 {
 		if count, ok := pageCount(ctx, path); ok && count > maxPages {
 			return nil, nil, tooManyPages(path, count, maxPages)
@@ -45,13 +52,10 @@ func Render(path string, maxPages int) (pages []string, cleanup func(), err erro
 	cleanup = func() { _ = os.RemoveAll(dir) }
 
 	var cmd *exec.Cmd
-	if binary, lookupErr := exec.LookPath("pdftoppm"); lookupErr == nil {
-		cmd = exec.CommandContext(ctx, binary, "-png", path, filepath.Join(dir, "page"))
-	} else if binary, lookupErr := exec.LookPath("mutool"); lookupErr == nil {
-		cmd = exec.CommandContext(ctx, binary, "draw", "-o", filepath.Join(dir, "page-%d.png"), path)
+	if errPDFTOPPM == nil {
+		cmd = exec.CommandContext(ctx, pdftoppm, "-png", path, filepath.Join(dir, "page"))
 	} else {
-		cleanup()
-		return nil, nil, fmt.Errorf("render PDF: neither pdftoppm nor mutool is installed (install Poppler or MuPDF)")
+		cmd = exec.CommandContext(ctx, mutool, "draw", "-o", filepath.Join(dir, "page-%d.png"), path)
 	}
 
 	if output, runErr := cmd.CombinedOutput(); runErr != nil {
