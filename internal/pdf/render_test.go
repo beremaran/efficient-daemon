@@ -2,6 +2,7 @@ package pdf
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -109,7 +110,7 @@ func TestPageCountUsesPDFInfo(t *testing.T) {
 	if _, err := exec.LookPath("pdfinfo"); err != nil {
 		t.Skip("pdfinfo not installed")
 	}
-	count, ok := pageCount(writePDF(t, makePDF(3)))
+	count, ok := pageCount(context.Background(), writePDF(t, makePDF(3)))
 	if !ok || count != 3 {
 		t.Fatalf("got (%d, %v), want (3, true)", count, ok)
 	}
