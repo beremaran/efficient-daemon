@@ -8,7 +8,8 @@ import (
 
 func TestFromFileResolvesTextAndLocalImage(t *testing.T) {
 	dir := t.TempDir()
-	if err := os.WriteFile(filepath.Join(dir, "image.png"), []byte("png"), 0o600); err != nil {
+	pngMagic := append([]byte("\x89PNG\r\n\x1a\n"), []byte("fake image payload")...)
+	if err := os.WriteFile(filepath.Join(dir, "image.png"), pngMagic, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	context := "system: Be concise.\nuser:\n  parts:\n    - text: Describe this.\n    - image: image.png\n"
@@ -23,6 +24,17 @@ func TestFromFileResolvesTextAndLocalImage(t *testing.T) {
 	}
 	if len(messages) != 2 {
 		t.Fatalf("got %d messages, want 2", len(messages))
+	}
+}
+
+func TestFromSimpleRejectsUnsupportedImage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "doc.txt")
+	if err := os.WriteFile(path, []byte("just text"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := FromSimple("", "prompt", []string{path})
+	if err == nil {
+		t.Fatal("expected unsupported image format error")
 	}
 }
 
