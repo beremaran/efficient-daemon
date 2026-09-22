@@ -54,6 +54,11 @@ func chatCompletionContext(ctx context.Context, client openai.Client, botContext
 		params.Temperature = openai.Float(*opts.Temperature)
 	}
 	if opts.MaxTokens != nil {
+		// Deliberately max_tokens rather than max_completion_tokens: the
+		// OpenAI-compatible servers this targets (vLLM and similar) accept
+		// max_tokens everywhere, while some of them reject
+		// max_completion_tokens outright. Flip this if the target becomes
+		// a newer OpenAI model that requires max_completion_tokens.
 		params.MaxTokens = openai.Int(*opts.MaxTokens)
 	}
 
