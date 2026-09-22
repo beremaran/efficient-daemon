@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"path/filepath"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -24,21 +25,30 @@ func Parse(raw []byte) (map[string]any, error) {
 }
 
 // Compile builds a validated *jsonschema.Schema from raw JSON Schema bytes.
-func Compile(raw []byte) (*jsonschema.Schema, error) {
+// sourcePath is the file the bytes came from; it anchors relative $ref lookups
+// to that file's directory rather than the process working directory. An empty
+// sourcePath anchors to the working directory.
+func Compile(raw []byte, sourcePath string) (*jsonschema.Schema, error) {
+	name := "schema.json"
+	if sourcePath != "" {
+		if abs, err := filepath.Abs(sourcePath); err == nil {
+			name = abs
+		}
+	}
 	compiler := jsonschema.NewCompiler()
-	if err := compiler.AddResource("schema.json", bytes.NewReader(raw)); err != nil {
+	if err := compiler.AddResource(name, bytes.NewReader(raw)); err != nil {
 		return nil, fmt.Errorf("compile schema: %w", err)
 	}
-	sch, err := compiler.Compile("schema.json")
+	sch, err := compiler.Compile(name)
 	if err != nil {
 		return nil, fmt.Errorf("compile schema: %w", err)
 	}
 	return sch, nil
 }
 
-// Validate checks that data conforms to the given JSON Schema.
-func Validate(rawSchema []byte, data any) error {
-	sch, err := Compile(rawSchema)
+// Validate checks that data conforms to the JSON Schema read from sourcePath.
+func Validate(rawSchema []byte, data any, sourcePath string) error {
+	sch, err := Compile(rawSchema, sourcePath)
 	if err != nil {
 		return err
 	}
