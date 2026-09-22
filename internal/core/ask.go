@@ -28,6 +28,8 @@ func chatCompletionContext(ctx context.Context, client openai.Client, botContext
 			ResponseFormat: openai.ChatCompletionNewParamsResponseFormatUnion{
 				OfJSONSchema: &shared.ResponseFormatJSONSchemaParam{
 					JSONSchema: shared.ResponseFormatJSONSchemaJSONSchemaParam{
+						// The API requires a non-empty name matching
+						// [a-zA-Z0-9_-]{1,64}; the zero value is rejected.
 						Name:   "response",
 						Schema: schema,
 						Strict: openai.Bool(true),
