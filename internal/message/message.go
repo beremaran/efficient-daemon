@@ -239,14 +239,11 @@ func imageParts(ref, base string) ([]openai.ChatCompletionContentPartUnionParam,
 
 // renderPDF rasterizes a local PDF file and returns one image part per page.
 func renderPDF(path string) ([]openai.ChatCompletionContentPartUnionParam, error) {
-	pages, cleanup, err := pdf.Render(path)
+	pages, cleanup, err := pdf.Render(path, maxPDFPages)
 	if err != nil {
 		return nil, err
 	}
 	defer cleanup()
-	if len(pages) > maxPDFPages {
-		return nil, fmt.Errorf("PDF %q has %d pages; the maximum is %d (split the document)", path, len(pages), maxPDFPages)
-	}
 	result := make([]openai.ChatCompletionContentPartUnionParam, 0, len(pages))
 	for _, page := range pages {
 		raw, readErr := os.ReadFile(page)
