@@ -13,6 +13,11 @@ import (
 // Render converts every page of path to a PNG and returns the generated paths.
 // The caller owns cleanup, which removes the temporary output directory.
 func Render(path string) (pages []string, cleanup func(), err error) {
+	// Resolve to an absolute path so a relative name like "-foo.pdf" is never
+	// parsed as a renderer flag.
+	if abs, absErr := filepath.Abs(path); absErr == nil {
+		path = abs
+	}
 	dir, err := os.MkdirTemp("", "efficient-daemon-pdf-*")
 	if err != nil {
 		return nil, nil, fmt.Errorf("create PDF render directory: %w", err)
