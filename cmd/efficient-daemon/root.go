@@ -121,6 +121,11 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	botContext := core.NewMessagesContext(opts.model, messages)
 	req := core.RequestOptions{ReasoningEffort: opts.reasoningEffort}
 	if cmd.Flags().Changed("temperature") {
+		// The OpenAI-compatible range is 0-2; reject anything else before
+		// spending a request on a provider-side error.
+		if opts.temperature < 0 || opts.temperature > 2 {
+			return fmt.Errorf("--temperature must be between 0 and 2")
+		}
 		temperature := opts.temperature
 		req.Temperature = &temperature
 	}
