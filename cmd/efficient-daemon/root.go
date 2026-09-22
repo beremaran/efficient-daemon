@@ -41,11 +41,22 @@ var version = "0.1.0"
 const maxTextBytes = 10 << 20 // 10 MiB per prompt file
 
 func newRootCommand() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:           "efficient-daemon",
+		Short:         "Structured-output LLM client",
+		Version:       version,
+		SilenceUsage:  true,
+		SilenceErrors: true,
+	}
+	cmd.AddCommand(newAskCommand())
+	return cmd
+}
+
+func newAskCommand() *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
-		Use:           "efficient-daemon [prompt]",
+		Use:           "ask [prompt]",
 		Short:         "Query an LLM with a structured response schema",
-		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args: func(cmd *cobra.Command, args []string) error {
@@ -59,7 +70,7 @@ func newRootCommand() *cobra.Command {
 		},
 	}
 
-	flags := cmd.PersistentFlags()
+	flags := cmd.Flags()
 	flags.StringVar(&opts.baseURL, "base-url", core.DefaultBaseURL, "OpenAI-compatible API base URL")
 	flags.StringVar(&opts.model, "model", core.DefaultModel, "model identifier")
 	flags.StringVar(&opts.apiKey, "api-key", "not-needed", "API key")
@@ -74,7 +85,7 @@ func newRootCommand() *cobra.Command {
 	flags.Float64Var(&opts.temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&opts.maxTokens, "max-tokens", 0, "maximum tokens to generate")
 	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
-	_ = cmd.MarkPersistentFlagRequired("schema")
+	_ = cmd.MarkFlagRequired("schema")
 	return cmd
 }
 
