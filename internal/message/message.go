@@ -194,10 +194,19 @@ func buildParts(parts []part, base string) ([]openai.ChatCompletionContentPartUn
 // because they cannot be rasterized without first writing them to disk.
 func imageParts(ref, base string) ([]openai.ChatCompletionContentPartUnionParam, error) {
 	parsed, err := url.Parse(ref)
-	if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https" || parsed.Scheme == "data") {
-		isRemotePDF := parsed.Scheme == "data" && strings.HasPrefix(strings.ToLower(ref), "data:application/pdf")
-		isURLPDF := parsed.Scheme != "data" && strings.HasSuffix(strings.ToLower(parsed.Path), ".pdf")
-		if isRemotePDF || isURLPDF {
+	if err == nil && parsed.Scheme == "data" {
+		// Never echo the payload itself; data URLs can be megabytes long.
+		lower := strings.ToLower(ref)
+		if strings.HasPrefix(lower, "data:application/pdf") {
+			return nil, fmt.Errorf("embedded PDF data URLs are not supported; save it to a local file and reference the path")
+		}
+		if !strings.HasPrefix(lower, "data:image/") {
+			return nil, fmt.Errorf("unsupported data URL (only data:image/ URLs are accepted; save other content to a local file)")
+		}
+		return []openai.ChatCompletionContentPartUnionParam{imagePart(ref)}, nil
+	}
+	if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+		if strings.HasSuffix(strings.ToLower(parsed.Path), ".pdf") {
 			return nil, fmt.Errorf("remote PDF %q is not supported; save it to a local file and reference the path", ref)
 		}
 		return []openai.ChatCompletionContentPartUnionParam{imagePart(ref)}, nil

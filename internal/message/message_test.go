@@ -38,6 +38,18 @@ func TestFromSimpleRejectsUnsupportedImage(t *testing.T) {
 	}
 }
 
+func TestFromSimpleValidatesDataURLs(t *testing.T) {
+	if _, err := FromSimple("", "", []string{"data:text/html,<script>"}); err == nil {
+		t.Fatal("expected non-image data URL rejection")
+	}
+	if _, err := FromSimple("", "", []string{"data:application/pdf;base64,JVBERi0="}); err == nil {
+		t.Fatal("expected embedded PDF rejection")
+	}
+	if _, err := FromSimple("", "", []string{"data:image/png;base64,iVBORw0KGgo="}); err != nil {
+		t.Fatalf("image data URL rejected: %v", err)
+	}
+}
+
 func TestFromFileRejectsNonTextSystemPart(t *testing.T) {
 	path := filepath.Join(t.TempDir(), "context.yaml")
 	context := "system:\n  parts:\n    - image: image.png\nuser: hello\n"
