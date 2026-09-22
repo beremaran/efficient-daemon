@@ -11,7 +11,7 @@ func TestValidate(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"answer":"yes"}`), &valid); err != nil {
 		t.Fatal(err)
 	}
-	if err := Validate(raw, valid); err != nil {
+	if err := Validate(raw, valid, ""); err != nil {
 		t.Fatalf("valid response rejected: %v", err)
 	}
 
@@ -19,7 +19,7 @@ func TestValidate(t *testing.T) {
 	if err := json.Unmarshal([]byte(`{"other":"no"}`), &invalid); err != nil {
 		t.Fatal(err)
 	}
-	if err := Validate(raw, invalid); err == nil {
+	if err := Validate(raw, invalid, ""); err == nil {
 		t.Fatal("invalid response accepted")
 	}
 }

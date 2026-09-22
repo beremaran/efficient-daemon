@@ -90,7 +90,7 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	if err != nil {
 		return err
 	}
-	if _, err := responseschema.Compile(rawSchema); err != nil {
+	if _, err := responseschema.Compile(rawSchema, opts.schema); err != nil {
 		return err
 	}
 
@@ -109,7 +109,7 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	if err := json.Unmarshal(raw, &value); err != nil {
 		return fmt.Errorf("model returned invalid JSON: %w", err)
 	}
-	if err := responseschema.Validate(rawSchema, value); err != nil {
+	if err := responseschema.Validate(rawSchema, value, opts.schema); err != nil {
 		return fmt.Errorf("model response does not match schema: %w", err)
 	}
 	return output.Write(cmd.OutOrStdout(), raw, opts.output)
