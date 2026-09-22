@@ -47,3 +47,19 @@ func TestFromFileRejectsEmptySystem(t *testing.T) {
 		t.Fatalf("got %v, want %q", err, "system message part 1 is empty")
 	}
 }
+
+func TestFromSimpleAllowsImageOnlyPrompt(t *testing.T) {
+	messages, err := FromSimple("system", "", []string{"https://example.com/cat.png"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 2 {
+		t.Fatalf("got %d messages, want 2", len(messages))
+	}
+}
+
+func TestFromSimpleRejectsEmptyPrompt(t *testing.T) {
+	if _, err := FromSimple("", "", nil); err == nil {
+		t.Fatal("expected empty user message error")
+	}
+}

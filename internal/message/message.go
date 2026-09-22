@@ -44,15 +44,22 @@ func (m *message) UnmarshalYAML(node *yaml.Node) error {
 	return node.Decode((*plain)(m))
 }
 
-// FromSimple builds messages from the command's text-oriented input mode.
+// FromSimple builds messages from the command's text-oriented input mode. The
+// user text may be empty when images are present, allowing image-only prompts.
 func FromSimple(system, user string, images []string) ([]openai.ChatCompletionMessageParamUnion, error) {
 	var result []openai.ChatCompletionMessageParamUnion
 	if system != "" {
 		result = append(result, openai.SystemMessage(system))
 	}
-	parts := []part{{Text: user}}
+	var parts []part
+	if user != "" {
+		parts = append(parts, part{Text: user})
+	}
 	for _, image := range images {
 		parts = append(parts, part{Image: image})
+	}
+	if len(parts) == 0 {
+		return nil, fmt.Errorf("user message is empty")
 	}
 	userParts, err := buildParts(parts, "")
 	if err != nil {
