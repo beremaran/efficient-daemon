@@ -1,8 +1,10 @@
 package main
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 
 	"efficient-daemon/internal/core"
@@ -128,9 +130,17 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 		return fmt.Errorf("ask model: %w", err)
 	}
 
+	// Decode with UseNumber as the jsonschema library requires for number
+	// precision: float64 would silently round integers beyond 2^53 before
+	// constraints like const or maximum are evaluated.
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
 	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
+	if err := decoder.Decode(&value); err != nil {
 		return fmt.Errorf("model returned invalid JSON: %w", err)
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return fmt.Errorf("model returned invalid JSON: trailing data after value")
 	}
 	if err := sch.Validate(value); err != nil {
 		return fmt.Errorf("model response does not match schema: %w", err)
