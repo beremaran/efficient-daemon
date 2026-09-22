@@ -69,10 +69,14 @@ func (p *part) UnmarshalYAML(node *yaml.Node) error {
 	return node.Decode((*plain)(p))
 }
 
-// checkKeys rejects mapping keys outside the allowed set.
+// checkKeys rejects mapping keys outside the allowed set. The YAML merge key
+// "<<" is exempt: the decoder applies it before decoding the value.
 func checkKeys(node *yaml.Node, allowed ...string) error {
 	for i := 0; i+1 < len(node.Content); i += 2 {
 		key := node.Content[i].Value
+		if key == "<<" {
+			continue
+		}
 		known := false
 		for _, name := range allowed {
 			if key == name {

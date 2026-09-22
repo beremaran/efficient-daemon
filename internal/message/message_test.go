@@ -1,8 +1,10 @@
 package message
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 )
 
@@ -125,5 +127,27 @@ func TestFromFileRejectsUnknownFields(t *testing.T) {
 				t.Fatal("expected unknown field error")
 			}
 		})
+	}
+}
+
+func TestFromFileSupportsAnchorsAndMergeKeys(t *testing.T) {
+	context := "system:\n  parts: &shared\n    - text: be brief\nuser:\n  <<: {parts: *shared}\n"
+	path := filepath.Join(t.TempDir(), "context.yaml")
+	if err := os.WriteFile(path, []byte(context), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	messages, err := FromFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(messages) != 2 {
+		t.Fatalf("got %d messages, want 2", len(messages))
+	}
+	encoded, err := json.Marshal(messages)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(string(encoded), "be brief") {
+		t.Fatalf("merged content missing from messages: %s", encoded)
 	}
 }
