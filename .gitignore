@@ -1,0 +1,12 @@
+# Compiled binary
+/efficient-daemon
+
+# Go build artifacts
+*.exe
+*.out
+*.dll
+
+# IDEs
+.idea/
+*.iml
+.vscode/
