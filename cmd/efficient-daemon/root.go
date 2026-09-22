@@ -29,11 +29,15 @@ type options struct {
 	maxTokens       int64
 }
 
+// version is the CLI version reported by --version.
+const version = "0.1.0"
+
 func newRootCommand() *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
 		Use:           "efficient-daemon [prompt]",
 		Short:         "Query an LLM with a structured response schema",
+		Version:       version,
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args: func(cmd *cobra.Command, args []string) error {
