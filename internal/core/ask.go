@@ -95,3 +95,10 @@ func reasoningEffort(name string) (openai.ReasoningEffort, error) {
 		return "", fmt.Errorf("invalid reasoning effort %q (want none, minimal, low, medium, high, xhigh, or max)", name)
 	}
 }
+
+// ValidateReasoningEffort reports whether name is a valid effort setting
+// without performing a request. An empty name is valid and keeps the default.
+func ValidateReasoningEffort(name string) error {
+	_, err := reasoningEffort(name)
+	return err
+}

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"sort"
@@ -222,4 +223,23 @@ func isObjectNode(node map[string]any) bool {
 		}
 	}
 	return false
+}
+
+// ValidateValue decodes raw JSON with UseNumber (preserving integer precision
+// for constraints like const or maximum) and validates the decoded value
+// against the compiled schema.
+func ValidateValue(sch *jsonschema.Schema, raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var value any
+	if err := decoder.Decode(&value); err != nil {
+		return fmt.Errorf("model returned invalid JSON: %w", err)
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return fmt.Errorf("model returned invalid JSON: trailing data after value")
+	}
+	if err := sch.Validate(value); err != nil {
+		return fmt.Errorf("model response does not match schema: %w", err)
+	}
+	return nil
 }

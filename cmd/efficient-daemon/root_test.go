@@ -173,3 +173,20 @@ func TestCommandEndToEnd(t *testing.T) {
 		t.Fatalf("got %q, want %q", got, want)
 	}
 }
+
+func TestServeRejectsInvalidConfig(t *testing.T) {
+	// Invalid configuration must fail before the listener starts, so these
+	// return instead of blocking on an open port.
+	for _, args := range [][]string{
+		{"serve", "--temperature=2.5"},
+		{"serve", "--max-tokens=-1"},
+		{"serve", "--timeout=-1s"},
+		{"serve", "--reasoning-effort=ultra"},
+	} {
+		cmd := newRootCommand()
+		cmd.SetArgs(args)
+		if err := cmd.Execute(); err == nil {
+			t.Fatalf("%v: expected error", args)
+		}
+	}
+}

@@ -41,13 +41,15 @@ func (c *contextFile) UnmarshalYAML(node *yaml.Node) error {
 }
 
 type message struct {
-	Parts []part `yaml:"parts"`
+	Parts []Part `yaml:"parts"`
 }
 
-type part struct {
-	Text  string `yaml:"text,omitempty"`
-	Image string `yaml:"image,omitempty"`
-	PDF   string `yaml:"pdf,omitempty"`
+// Part is one element of a user message. Over the HTTP API the same fields
+// carry base64-encoded media instead of file paths (see internal/server).
+type Part struct {
+	Text  string `json:"text,omitempty" yaml:"text,omitempty" jsonschema:"description=Plain text content."`
+	Image string `json:"image,omitempty" yaml:"image,omitempty" jsonschema:"description=Image as an http(s) URL or base64-encoded file bytes."`
+	PDF   string `json:"pdf,omitempty" yaml:"pdf,omitempty" jsonschema:"description=PDF document as base64-encoded file bytes; rasterized to page images before sending."`
 }
 
 // UnmarshalYAML supports either a plain string or an object containing parts.
@@ -57,7 +59,7 @@ func (m *message) UnmarshalYAML(node *yaml.Node) error {
 		if err := node.Decode(&text); err != nil {
 			return err
 		}
-		m.Parts = []part{{Text: text}}
+		m.Parts = []Part{{Text: text}}
 		return nil
 	}
 	if node.Kind != yaml.MappingNode {
@@ -72,14 +74,14 @@ func (m *message) UnmarshalYAML(node *yaml.Node) error {
 
 // UnmarshalYAML decodes a part and rejects unknown fields, since node.Decode
 // ignores the surrounding decoder's KnownFields setting.
-func (p *part) UnmarshalYAML(node *yaml.Node) error {
+func (p *Part) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind != yaml.MappingNode {
 		return fmt.Errorf("expected a mapping with one of text, image, or pdf")
 	}
 	if err := checkKeys(node, "text", "image", "pdf"); err != nil {
 		return err
 	}
-	type plain part
+	type plain Part
 	return node.Decode((*plain)(p))
 }
 
@@ -108,16 +110,22 @@ func checkKeys(node *yaml.Node, allowed ...string) error {
 // FromSimple builds messages from the command's text-oriented input mode. The
 // user text may be empty when images are present, allowing image-only prompts.
 func FromSimple(system, user string, images []string) ([]openai.ChatCompletionMessageParamUnion, error) {
+	var parts []Part
+	if user != "" {
+		parts = append(parts, Part{Text: user})
+	}
+	for _, image := range images {
+		parts = append(parts, Part{Image: image})
+	}
+	return FromParts(system, parts)
+}
+
+// FromParts builds messages from a system string and an explicit user-parts
+// list, the shape both the context document and the HTTP API use.
+func FromParts(system string, parts []Part) ([]openai.ChatCompletionMessageParamUnion, error) {
 	var result []openai.ChatCompletionMessageParamUnion
 	if system != "" {
 		result = append(result, openai.SystemMessage(system))
-	}
-	var parts []part
-	if user != "" {
-		parts = append(parts, part{Text: user})
-	}
-	for _, image := range images {
-		parts = append(parts, part{Image: image})
 	}
 	if len(parts) == 0 {
 		return nil, fmt.Errorf("user message is empty")
@@ -176,7 +184,7 @@ func FromFile(path string) ([]openai.ChatCompletionMessageParamUnion, error) {
 	return append(result, openai.UserMessage(parts)), nil
 }
 
-func buildParts(parts []part, base string) ([]openai.ChatCompletionContentPartUnionParam, error) {
+func buildParts(parts []Part, base string) ([]openai.ChatCompletionContentPartUnionParam, error) {
 	var result []openai.ChatCompletionContentPartUnionParam
 	for i, p := range parts {
 		count := 0
