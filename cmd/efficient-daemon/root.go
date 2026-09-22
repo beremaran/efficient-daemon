@@ -116,7 +116,7 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	if err != nil {
 		return err
 	}
-	for _, warning := range responseschema.StrictSubsetWarnings(rawSchema) {
+	for _, warning := range responseschema.StrictSubsetWarnings(rawSchema, opts.schema) {
 		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s is an object without additionalProperties: false; strict structured output may reject this schema\n", warning)
 	}
 
