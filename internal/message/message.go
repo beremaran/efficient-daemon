@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
-	"mime"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -260,10 +259,29 @@ func resolvePath(path, base string) string {
 	return filepath.Join(base, path)
 }
 
+// localDataURL encodes raw image bytes as a data URL after verifying the
+// content is a supported raster format, since vision APIs accept only these.
 func localDataURL(path string, raw []byte) (string, error) {
-	mediaType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
-	if mediaType == "" {
-		mediaType = "application/octet-stream"
+	mediaType, ok := imageMediaType(raw)
+	if !ok {
+		return "", fmt.Errorf("unsupported image format for %q; supported formats: png, jpeg, webp, gif", path)
 	}
 	return "data:" + mediaType + ";base64," + base64.StdEncoding.EncodeToString(raw), nil
+}
+
+// imageMediaType identifies supported image formats by magic bytes, so files
+// with missing or misleading extensions are still handled correctly.
+func imageMediaType(raw []byte) (string, bool) {
+	switch {
+	case bytes.HasPrefix(raw, []byte("\x89PNG\r\n\x1a\n")):
+		return "image/png", true
+	case bytes.HasPrefix(raw, []byte("\xff\xd8\xff")):
+		return "image/jpeg", true
+	case bytes.EqualFold(raw[:min(len(raw), 6)], []byte("GIF87a")) || bytes.EqualFold(raw[:min(len(raw), 6)], []byte("GIF89a")):
+		return "image/gif", true
+	case len(raw) >= 12 && bytes.EqualFold(raw[:4], []byte("RIFF")) && bytes.EqualFold(raw[8:12], []byte("WEBP")):
+		return "image/webp", true
+	default:
+		return "", false
+	}
 }
