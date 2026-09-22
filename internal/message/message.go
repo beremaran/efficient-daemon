@@ -14,32 +14,32 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-type ContextFile struct {
-	System Message `yaml:"system" json:"system"`
-	User   Message `yaml:"user" json:"user"`
+type contextFile struct {
+	System message `yaml:"system"`
+	User   message `yaml:"user"`
 }
 
-type Message struct {
-	Parts []Part `yaml:"parts" json:"parts"`
+type message struct {
+	Parts []part `yaml:"parts"`
 }
 
-type Part struct {
-	Text  string `yaml:"text,omitempty" json:"text,omitempty"`
-	Image string `yaml:"image,omitempty" json:"image,omitempty"`
-	PDF   string `yaml:"pdf,omitempty" json:"pdf,omitempty"`
+type part struct {
+	Text  string `yaml:"text,omitempty"`
+	Image string `yaml:"image,omitempty"`
+	PDF   string `yaml:"pdf,omitempty"`
 }
 
 // UnmarshalYAML supports either a plain string or an object containing parts.
-func (m *Message) UnmarshalYAML(node *yaml.Node) error {
+func (m *message) UnmarshalYAML(node *yaml.Node) error {
 	if node.Kind == yaml.ScalarNode {
 		var text string
 		if err := node.Decode(&text); err != nil {
 			return err
 		}
-		m.Parts = []Part{{Text: text}}
+		m.Parts = []part{{Text: text}}
 		return nil
 	}
-	type plain Message
+	type plain message
 	return node.Decode((*plain)(m))
 }
 
@@ -49,9 +49,9 @@ func FromSimple(system, user string, images []string) ([]openai.ChatCompletionMe
 	if system != "" {
 		result = append(result, openai.SystemMessage(system))
 	}
-	parts := []Part{{Text: user}}
+	parts := []part{{Text: user}}
 	for _, image := range images {
-		parts = append(parts, Part{Image: image})
+		parts = append(parts, part{Image: image})
 	}
 	userParts, err := buildParts(parts, "")
 	if err != nil {
@@ -67,60 +67,60 @@ func FromFile(path string) ([]openai.ChatCompletionMessageParamUnion, error) {
 	if err != nil {
 		return nil, fmt.Errorf("read context %q: %w", path, err)
 	}
-	var contextFile ContextFile
-	if err := yaml.Unmarshal(raw, &contextFile); err != nil {
+	var doc contextFile
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parse context %q: %w", path, err)
 	}
 	base := filepath.Dir(path)
 	var result []openai.ChatCompletionMessageParamUnion
-	if len(contextFile.System.Parts) > 0 {
+	if len(doc.System.Parts) > 0 {
 		var texts []string
-		for _, part := range contextFile.System.Parts {
-			if part.Text == "" || part.Image != "" || part.PDF != "" {
+		for _, p := range doc.System.Parts {
+			if p.Text == "" || p.Image != "" || p.PDF != "" {
 				return nil, fmt.Errorf("system message supports text parts only")
 			}
-			texts = append(texts, part.Text)
+			texts = append(texts, p.Text)
 		}
 		result = append(result, openai.SystemMessage(strings.Join(texts, "\n")))
 	}
-	if len(contextFile.User.Parts) == 0 {
+	if len(doc.User.Parts) == 0 {
 		return nil, fmt.Errorf("context must contain a user message")
 	}
-	parts, err := buildParts(contextFile.User.Parts, base)
+	parts, err := buildParts(doc.User.Parts, base)
 	if err != nil {
 		return nil, err
 	}
 	return append(result, openai.UserMessage(parts)), nil
 }
 
-func buildParts(parts []Part, base string) ([]openai.ChatCompletionContentPartUnionParam, error) {
+func buildParts(parts []part, base string) ([]openai.ChatCompletionContentPartUnionParam, error) {
 	var result []openai.ChatCompletionContentPartUnionParam
-	for i, part := range parts {
+	for i, p := range parts {
 		count := 0
-		if part.Text != "" {
+		if p.Text != "" {
 			count++
 		}
-		if part.Image != "" {
+		if p.Image != "" {
 			count++
 		}
-		if part.PDF != "" {
+		if p.PDF != "" {
 			count++
 		}
 		if count != 1 {
 			return nil, fmt.Errorf("message part %d must set exactly one of text, image, or pdf", i+1)
 		}
 		switch {
-		case part.Text != "":
-			text := openai.ChatCompletionContentPartTextParam{Text: part.Text}
+		case p.Text != "":
+			text := openai.ChatCompletionContentPartTextParam{Text: p.Text}
 			result = append(result, openai.ChatCompletionContentPartUnionParam{OfText: &text})
-		case part.Image != "":
-			imageURL, err := resolveImage(part.Image, base)
+		case p.Image != "":
+			imageURL, err := resolveImage(p.Image, base)
 			if err != nil {
 				return nil, err
 			}
 			result = append(result, imagePart(imageURL))
-		case part.PDF != "":
-			path := resolvePath(part.PDF, base)
+		case p.PDF != "":
+			path := resolvePath(p.PDF, base)
 			pages, cleanup, err := pdf.Render(path)
 			if err != nil {
 				return nil, err

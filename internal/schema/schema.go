@@ -4,21 +4,9 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
-	"os"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
-
-// Load reads a JSON Schema document from path and returns it as a generic map
-// suitable for passing to the LLM SDK. Integer constraints are preserved so they
-// survive the round-trip through the SDK's request serialization.
-func Load(path string) (map[string]any, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read schema %q: %w", path, err)
-	}
-	return Parse(raw)
-}
 
 // Parse parses raw JSON Schema bytes into a generic map.
 func Parse(raw []byte) (map[string]any, error) {
