@@ -79,3 +79,21 @@ func TestFromSimpleRejectsOversizedImage(t *testing.T) {
 		t.Fatal("expected oversized image error")
 	}
 }
+
+func TestFromFileRejectsUnknownFields(t *testing.T) {
+	for name, context := range map[string]string{
+		"top level": "system: hi\nuser: hello\npartz: []\n",
+		"message":   "system: hi\nuser:\n  partz:\n    - text: hello\n",
+		"part":      "system: hi\nuser:\n  parts:\n    - txt: hello\n",
+	} {
+		t.Run(name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "context.yaml")
+			if err := os.WriteFile(path, []byte(context), 0o600); err != nil {
+				t.Fatal(err)
+			}
+			if _, err := FromFile(path); err == nil {
+				t.Fatal("expected unknown field error")
+			}
+		})
+	}
+}

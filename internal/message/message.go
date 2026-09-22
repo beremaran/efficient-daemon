@@ -47,8 +47,45 @@ func (m *message) UnmarshalYAML(node *yaml.Node) error {
 		m.Parts = []part{{Text: text}}
 		return nil
 	}
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected a string or a mapping with a parts list")
+	}
+	if err := checkKeys(node, "parts"); err != nil {
+		return err
+	}
 	type plain message
 	return node.Decode((*plain)(m))
+}
+
+// UnmarshalYAML decodes a part and rejects unknown fields, since node.Decode
+// ignores the surrounding decoder's KnownFields setting.
+func (p *part) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("expected a mapping with one of text, image, or pdf")
+	}
+	if err := checkKeys(node, "text", "image", "pdf"); err != nil {
+		return err
+	}
+	type plain part
+	return node.Decode((*plain)(p))
+}
+
+// checkKeys rejects mapping keys outside the allowed set.
+func checkKeys(node *yaml.Node, allowed ...string) error {
+	for i := 0; i+1 < len(node.Content); i += 2 {
+		key := node.Content[i].Value
+		known := false
+		for _, name := range allowed {
+			if key == name {
+				known = true
+				break
+			}
+		}
+		if !known {
+			return fmt.Errorf("unknown field %q (allowed: %s)", key, strings.Join(allowed, ", "))
+		}
+	}
+	return nil
 }
 
 // FromSimple builds messages from the command's text-oriented input mode. The
@@ -83,7 +120,9 @@ func FromFile(path string) ([]openai.ChatCompletionMessageParamUnion, error) {
 		return nil, fmt.Errorf("read context %q: %w", path, err)
 	}
 	var doc contextFile
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	decoder.KnownFields(true)
+	if err := decoder.Decode(&doc); err != nil {
 		return nil, fmt.Errorf("parse context %q: %w", path, err)
 	}
 	base := filepath.Dir(path)
