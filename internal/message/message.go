@@ -205,7 +205,10 @@ func imageParts(ref, base string) ([]openai.ChatCompletionContentPartUnionParam,
 		}
 		return []openai.ChatCompletionContentPartUnionParam{imagePart(ref)}, nil
 	}
-	if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") {
+	// A non-empty host distinguishes real URLs from scheme-like local paths
+	// such as a file named "http:foo.png" (which url.Parse reports with an
+	// empty Host).
+	if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != "" {
 		if strings.HasSuffix(strings.ToLower(parsed.Path), ".pdf") {
 			return nil, fmt.Errorf("remote PDF %q is not supported; save it to a local file and reference the path", ref)
 		}
