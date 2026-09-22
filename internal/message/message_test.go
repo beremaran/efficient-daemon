@@ -123,8 +123,12 @@ func TestFromFileRejectsUnknownFields(t *testing.T) {
 			if err := os.WriteFile(path, []byte(context), 0o600); err != nil {
 				t.Fatal(err)
 			}
-			if _, err := FromFile(path); err == nil {
+			_, err := FromFile(path)
+			if err == nil {
 				t.Fatal("expected unknown field error")
+			}
+			if !strings.Contains(err.Error(), "unknown field") {
+				t.Fatalf("error %q should name the unknown field", err)
 			}
 		})
 	}

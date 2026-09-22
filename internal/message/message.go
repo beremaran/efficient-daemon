@@ -26,6 +26,19 @@ type contextFile struct {
 	User   message `yaml:"user"`
 }
 
+// UnmarshalYAML rejects unknown top-level fields itself so the error matches
+// the message- and part-level wording instead of leaking internal type names.
+func (c *contextFile) UnmarshalYAML(node *yaml.Node) error {
+	if node.Kind != yaml.MappingNode {
+		return fmt.Errorf("context must be a mapping with system and user fields")
+	}
+	if err := checkKeys(node, "system", "user"); err != nil {
+		return err
+	}
+	type plain contextFile
+	return node.Decode((*plain)(c))
+}
+
 type message struct {
 	Parts []part `yaml:"parts"`
 }
@@ -123,9 +136,7 @@ func FromFile(path string) ([]openai.ChatCompletionMessageParamUnion, error) {
 		return nil, fmt.Errorf("read context %q: %w", path, err)
 	}
 	var doc contextFile
-	decoder := yaml.NewDecoder(bytes.NewReader(raw))
-	decoder.KnownFields(true)
-	if err := decoder.Decode(&doc); err != nil {
+	if err := yaml.Unmarshal(raw, &doc); err != nil {
 		return nil, fmt.Errorf("parse context %q: %w", path, err)
 	}
 	base := filepath.Dir(path)
