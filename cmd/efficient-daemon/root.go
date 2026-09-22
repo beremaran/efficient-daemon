@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"time"
 
 	"efficient-daemon/internal/core"
 	"efficient-daemon/internal/message"
@@ -29,6 +30,7 @@ type options struct {
 	reasoningEffort string
 	temperature     float64
 	maxTokens       int64
+	timeout         time.Duration
 }
 
 // version is the CLI version reported by --version.
@@ -67,6 +69,7 @@ func newRootCommand() *cobra.Command {
 	flags.StringVar(&opts.reasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
 	flags.Float64Var(&opts.temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&opts.maxTokens, "max-tokens", 0, "maximum tokens to generate")
+	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "request timeout; 0 disables it")
 	_ = cmd.MarkPersistentFlagRequired("schema")
 	return cmd
 }
@@ -111,7 +114,10 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	if err != nil {
 		return err
 	}
-	client := core.NewClient(core.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey})
+	if opts.timeout < 0 {
+		return fmt.Errorf("--timeout must not be negative")
+	}
+	client := core.NewClient(core.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey, Timeout: opts.timeout})
 	botContext := core.NewMessagesContext(opts.model, messages)
 	req := core.RequestOptions{ReasoningEffort: opts.reasoningEffort}
 	if cmd.Flags().Changed("temperature") {

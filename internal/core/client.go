@@ -1,6 +1,8 @@
 package core
 
 import (
+	"time"
+
 	"github.com/openai/openai-go/v3"
 	"github.com/openai/openai-go/v3/option"
 )
@@ -10,12 +12,16 @@ const (
 	DefaultModel = "Qwen3.5-2B"
 	// DefaultBaseURL is the default chat-completions endpoint.
 	DefaultBaseURL = "https://llm-desktop.kwilabs.net/v1"
+	// DefaultTimeout bounds a single completion request. Zero disables it.
+	DefaultTimeout = 5 * time.Minute
 )
 
 // Config holds the connection settings for the LLM client.
 type Config struct {
 	BaseURL string
 	APIKey  string
+	// Timeout bounds each request; zero or negative means no timeout.
+	Timeout time.Duration
 }
 
 // NewClient builds an OpenAI client from the given configuration.
@@ -31,8 +37,12 @@ func NewClient(cfg Config) openai.Client {
 	if apiKey == "" {
 		apiKey = "not-needed"
 	}
-	return openai.NewClient(
+	opts := []option.RequestOption{
 		option.WithBaseURL(baseURL),
 		option.WithAPIKey(apiKey),
-	)
+	}
+	if cfg.Timeout > 0 {
+		opts = append(opts, option.WithRequestTimeout(cfg.Timeout))
+	}
+	return openai.NewClient(opts...)
 }
