@@ -204,6 +204,22 @@ func imageParts(ref, base string) ([]openai.ChatCompletionContentPartUnionParam,
 	}
 
 	path := resolvePath(ref, base)
+	// Stat before reading so an oversized or non-regular file is rejected
+	// without loading it into memory. PDFs are bounded by page count instead
+	// of byte size, so a large .pdf still reaches the rasterizer.
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, fmt.Errorf("read image %q: %w", path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return nil, fmt.Errorf("image %q is not a regular file", path)
+	}
+	if strings.EqualFold(filepath.Ext(path), ".pdf") && info.Size() > maxImageBytes {
+		return renderPDF(path)
+	}
+	if info.Size() > maxImageBytes {
+		return nil, imageTooLarge(path, info.Size())
+	}
 	raw, err := os.ReadFile(path)
 	if err != nil {
 		return nil, fmt.Errorf("read image %q: %w", path, err)
@@ -212,7 +228,7 @@ func imageParts(ref, base string) ([]openai.ChatCompletionContentPartUnionParam,
 		return renderPDF(path)
 	}
 	if len(raw) > maxImageBytes {
-		return nil, fmt.Errorf("image %q is %.1f MB; the maximum is %d MB", path, float64(len(raw))/(1<<20), maxImageBytes/(1<<20))
+		return nil, imageTooLarge(path, int64(len(raw)))
 	}
 	dataURL, err := localDataURL(path, raw)
 	if err != nil {
@@ -245,6 +261,10 @@ func renderPDF(path string) ([]openai.ChatCompletionContentPartUnionParam, error
 
 func isPDF(path string, raw []byte) bool {
 	return strings.EqualFold(filepath.Ext(path), ".pdf") || bytes.HasPrefix(raw, []byte("%PDF"))
+}
+
+func imageTooLarge(path string, size int64) error {
+	return fmt.Errorf("image %q is %.1f MB; the maximum is %d MB", path, float64(size)/(1<<20), maxImageBytes/(1<<20))
 }
 
 func imagePart(value string) openai.ChatCompletionContentPartUnionParam {
