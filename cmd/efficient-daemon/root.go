@@ -79,6 +79,9 @@ func newRootCommand() *cobra.Command {
 }
 
 func validateInputs(opts options, args []string) error {
+	if opts.timeout < 0 {
+		return fmt.Errorf("--timeout must not be negative")
+	}
 	if opts.output != "json" && opts.output != "json-pretty" {
 		return fmt.Errorf("invalid --output %q (want json or json-pretty)", opts.output)
 	}
@@ -120,9 +123,6 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	messages, err := buildMessages(opts, args)
 	if err != nil {
 		return err
-	}
-	if opts.timeout < 0 {
-		return fmt.Errorf("--timeout must not be negative")
 	}
 	client := core.NewClient(core.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey, Timeout: opts.timeout})
 	botContext := core.NewMessagesContext(opts.model, messages)
