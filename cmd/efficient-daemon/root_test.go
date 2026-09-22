@@ -52,7 +52,7 @@ func TestDecodeResponseKeepsIntegerPrecision(t *testing.T) {
 	cmd := newRootCommand()
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
-	cmd.SetArgs([]string{"--base-url", server.URL, "--model", "test", "--schema", schemaPath, "hello"})
+	cmd.SetArgs([]string{"ask", "--base-url", server.URL, "--model", "test", "--schema", schemaPath, "hello"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatalf("large integer failed validation: %v", err)
 	}
@@ -89,7 +89,7 @@ func TestRunRejectsOutOfRangeTemperature(t *testing.T) {
 	}
 	for _, value := range []string{"-0.5", "2.5"} {
 		cmd := newRootCommand()
-		cmd.SetArgs([]string{"--base-url", "http://127.0.0.1:1", "--schema", schemaPath, "--temperature", value, "hello"})
+		cmd.SetArgs([]string{"ask", "--base-url", "http://127.0.0.1:1", "--schema", schemaPath, "--temperature", value, "hello"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "--temperature must be between 0 and 2") {
 			t.Fatalf("temperature %s: got %v, want range error", value, err)
@@ -112,7 +112,7 @@ func TestCommandHonorsTimeout(t *testing.T) {
 	}
 
 	cmd := newRootCommand()
-	cmd.SetArgs([]string{"--base-url", server.URL, "--model", "test", "--schema", schemaPath, "--timeout", "100ms", "hello"})
+	cmd.SetArgs([]string{"ask", "--base-url", server.URL, "--model", "test", "--schema", schemaPath, "--timeout", "100ms", "hello"})
 	start := time.Now()
 	err := cmd.Execute()
 	if err == nil {
@@ -139,7 +139,7 @@ func TestCommandEndToEnd(t *testing.T) {
 	cmd := newRootCommand()
 	var stdout bytes.Buffer
 	cmd.SetOut(&stdout)
-	cmd.SetArgs([]string{"--base-url", server.URL, "--model", "test", "--schema", schemaPath, "--output", "json", "hello"})
+	cmd.SetArgs([]string{"ask", "--base-url", server.URL, "--model", "test", "--schema", schemaPath, "--output", "json", "hello"})
 	if err := cmd.Execute(); err != nil {
 		t.Fatal(err)
 	}
