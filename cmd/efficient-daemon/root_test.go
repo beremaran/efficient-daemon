@@ -24,6 +24,7 @@ func TestValidateInputs(t *testing.T) {
 		{name: "missing input", opts: options{output: "json-pretty"}, wantErr: true},
 		{name: "mixed modes", opts: options{output: "json-pretty", context: "context.yaml", system: "x"}, wantErr: true},
 		{name: "invalid output", opts: options{output: "yaml"}, args: []string{"hello"}, wantErr: true},
+		{name: "negative timeout", opts: options{output: "json-pretty", timeout: -time.Second}, args: []string{"hello"}, wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
