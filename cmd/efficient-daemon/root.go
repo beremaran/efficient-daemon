@@ -14,16 +14,19 @@ import (
 )
 
 type options struct {
-	baseURL    string
-	model      string
-	apiKey     string
-	schema     string
-	context    string
-	system     string
-	systemFile string
-	userFile   string
-	images     []string
-	output     string
+	baseURL         string
+	model           string
+	apiKey          string
+	schema          string
+	context         string
+	system          string
+	systemFile      string
+	userFile        string
+	images          []string
+	output          string
+	reasoningEffort string
+	temperature     float64
+	maxTokens       int64
 }
 
 func newRootCommand() *cobra.Command {
@@ -55,6 +58,9 @@ func newRootCommand() *cobra.Command {
 	flags.StringVar(&opts.userFile, "user-file", "", "read the user message from a file")
 	flags.StringArrayVar(&opts.images, "image", nil, "image URL or local image path (repeatable)")
 	flags.StringVar(&opts.output, "output", "json-pretty", "output format: json or json-pretty")
+	flags.StringVar(&opts.reasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
+	flags.Float64Var(&opts.temperature, "temperature", 0, "sampling temperature; omit to use the server default")
+	flags.Int64Var(&opts.maxTokens, "max-tokens", 0, "maximum tokens to generate")
 	_ = cmd.MarkPersistentFlagRequired("schema")
 	return cmd
 }
@@ -101,7 +107,19 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	}
 	client := core.NewClient(core.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey})
 	botContext := core.NewMessagesContext(opts.model, messages)
-	raw, err := core.AskSchema(cmd.Context(), client, botContext, schemaMap)
+	req := core.RequestOptions{ReasoningEffort: opts.reasoningEffort}
+	if cmd.Flags().Changed("temperature") {
+		temperature := opts.temperature
+		req.Temperature = &temperature
+	}
+	if cmd.Flags().Changed("max-tokens") {
+		if opts.maxTokens <= 0 {
+			return fmt.Errorf("--max-tokens must be positive")
+		}
+		maxTokens := opts.maxTokens
+		req.MaxTokens = &maxTokens
+	}
+	raw, err := core.AskSchema(cmd.Context(), client, botContext, schemaMap, req)
 	if err != nil {
 		return fmt.Errorf("ask model: %w", err)
 	}
