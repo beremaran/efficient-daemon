@@ -92,6 +92,12 @@ func TestFromSimpleRejectsOversizedImage(t *testing.T) {
 	}
 }
 
+func TestFromSimpleRejectsNonRegularFile(t *testing.T) {
+	if _, err := FromSimple("", "", []string{os.DevNull}); err == nil {
+		t.Fatal("expected non-regular file error")
+	}
+}
+
 func TestFromFileRejectsUnknownFields(t *testing.T) {
 	for name, context := range map[string]string{
 		"top level": "system: hi\nuser: hello\npartz: []\n",
