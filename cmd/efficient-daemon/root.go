@@ -33,8 +33,9 @@ type options struct {
 	timeout         time.Duration
 }
 
-// version is the CLI version reported by --version.
-const version = "0.1.0"
+// version is the CLI version reported by --version. Override at build time
+// with -ldflags "-X main.version=v1.2.3".
+var version = "0.1.0"
 
 // maxTextBytes bounds prompt files the same way media files are bounded.
 const maxTextBytes = 10 << 20 // 10 MiB per prompt file
