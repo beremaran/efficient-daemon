@@ -1,17 +1,22 @@
 package main
 
 import (
-	"bytes"
-	"encoding/json"
+	"context"
+	"errors"
 	"fmt"
-	"io"
+	"net"
+	"net/http"
 	"os"
+	"os/signal"
+	"strconv"
+	"syscall"
 	"time"
 
 	"efficient-daemon/internal/core"
 	"efficient-daemon/internal/message"
 	"efficient-daemon/internal/output"
 	responseschema "efficient-daemon/internal/schema"
+	"efficient-daemon/internal/server"
 	"github.com/openai/openai-go/v3"
 	"github.com/spf13/cobra"
 )
@@ -48,7 +53,7 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(newAskCommand(), newSchemaCommand())
+	cmd.AddCommand(newAskCommand(), newSchemaCommand(), newServeCommand())
 	return cmd
 }
 
@@ -175,21 +180,8 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	if err != nil {
 		return fmt.Errorf("ask model: %w", err)
 	}
-
-	// Decode with UseNumber as the jsonschema library requires for number
-	// precision: float64 would silently round integers beyond 2^53 before
-	// constraints like const or maximum are evaluated.
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var value any
-	if err := decoder.Decode(&value); err != nil {
-		return fmt.Errorf("model returned invalid JSON: %w", err)
-	}
-	if _, err := decoder.Token(); err != io.EOF {
-		return fmt.Errorf("model returned invalid JSON: trailing data after value")
-	}
-	if err := sch.Validate(value); err != nil {
-		return fmt.Errorf("model response does not match schema: %w", err)
+	if err := responseschema.ValidateValue(sch, raw); err != nil {
+		return err
 	}
 	return output.Write(cmd.OutOrStdout(), raw, opts.output)
 }
@@ -239,4 +231,66 @@ func readPromptFile(kind, path string) (string, error) {
 		return "", fmt.Errorf("read %s %q: %w", kind, path, err)
 	}
 	return string(raw), nil
+}
+
+func newServeCommand() *cobra.Command {
+	var cfg server.Config
+	var temperature float64
+	var maxTokens int64
+	cmd := &cobra.Command{
+		Use:           "serve",
+		Short:         "Serve the ask flow over HTTP with generated OpenAPI docs",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			flags := cmd.Flags()
+			if flags.Changed("temperature") {
+				cfg.Temperature = &temperature
+			}
+			if flags.Changed("max-tokens") {
+				cfg.MaxTokens = &maxTokens
+			}
+			return runServe(cmd, cfg)
+		},
+	}
+
+	flags := cmd.Flags()
+	flags.StringVar(&cfg.Host, "host", "127.0.0.1", "host or interface to listen on")
+	flags.IntVar(&cfg.Port, "port", 8080, "port to listen on")
+	// Everything below is a request default; any POST /ask field overrides it.
+	flags.StringVar(&cfg.BaseURL, "base-url", core.DefaultBaseURL, "OpenAI-compatible API base URL")
+	flags.StringVar(&cfg.Model, "model", core.DefaultModel, "model identifier")
+	flags.StringVar(&cfg.APIKey, "api-key", "not-needed", "API key")
+	flags.StringVar(&cfg.ReasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
+	flags.Float64Var(&temperature, "temperature", 0, "sampling temperature; omit to use the server default")
+	flags.Int64Var(&maxTokens, "max-tokens", 0, "maximum tokens to generate")
+	flags.DurationVar(&cfg.Timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
+	return cmd
+}
+
+func runServe(cmd *cobra.Command, cfg server.Config) error {
+	cfg.Version = version
+	handler, err := server.New(cfg)
+	if err != nil {
+		return err
+	}
+	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)))
+	if err != nil {
+		return fmt.Errorf("listen on %s:%d: %w", cfg.Host, cfg.Port, err)
+	}
+	srv := &http.Server{Handler: handler}
+	ctx, stop := signal.NotifyContext(cmd.Context(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
+	go func() {
+		<-ctx.Done()
+		shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = srv.Shutdown(shutdownCtx)
+	}()
+	fmt.Fprintf(cmd.OutOrStdout(), "serving on http://%s (API docs at /docs)\n", listener.Addr())
+	if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
+		return err
+	}
+	return nil
 }
