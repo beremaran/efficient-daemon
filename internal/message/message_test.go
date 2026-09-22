@@ -63,3 +63,19 @@ func TestFromSimpleRejectsEmptyPrompt(t *testing.T) {
 		t.Fatal("expected empty user message error")
 	}
 }
+
+func TestFromSimpleRejectsOversizedImage(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "big.png")
+	file, err := os.Create(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(maxImageBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+	_, err = FromSimple("", "", []string{path})
+	if err == nil {
+		t.Fatal("expected oversized image error")
+	}
+}
