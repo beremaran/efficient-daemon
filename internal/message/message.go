@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/base64"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -136,7 +137,18 @@ func FromFile(path string) ([]openai.ChatCompletionMessageParamUnion, error) {
 		return nil, fmt.Errorf("read context %q: %w", path, err)
 	}
 	var doc contextFile
-	if err := yaml.Unmarshal(raw, &doc); err != nil {
+	decoder := yaml.NewDecoder(bytes.NewReader(raw))
+	if err := decoder.Decode(&doc); err != nil {
+		if err == io.EOF {
+			return nil, fmt.Errorf("context file %q is empty", path)
+		}
+		return nil, fmt.Errorf("parse context %q: %w", path, err)
+	}
+	var extra yaml.Node
+	if err := decoder.Decode(&extra); err != io.EOF {
+		if err == nil {
+			return nil, fmt.Errorf("context file %q must contain a single YAML document", path)
+		}
 		return nil, fmt.Errorf("parse context %q: %w", path, err)
 	}
 	base := filepath.Dir(path)
