@@ -1,6 +1,7 @@
 package pdf
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"os/exec"
@@ -9,10 +10,16 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 )
 
 // pdfInfoPages matches the "Pages:" line printed by pdfinfo.
 var pdfInfoPages = regexp.MustCompile(`(?m)^Pages:\s+(\d+)`)
+
+// renderTimeout bounds external renderer binaries so a pathological PDF cannot
+// hang the CLI. It is deliberately independent of --timeout: rendering cost
+// depends on the document, not on the model request.
+const renderTimeout = 2 * time.Minute
 
 // Render converts every page of path to a PNG and returns the generated paths.
 // If maxPages is positive, a PDF with more pages fails before rendering when
@@ -24,8 +31,10 @@ func Render(path string, maxPages int) (pages []string, cleanup func(), err erro
 	if abs, absErr := filepath.Abs(path); absErr == nil {
 		path = abs
 	}
+	ctx, cancel := context.WithTimeout(context.Background(), renderTimeout)
+	defer cancel()
 	if maxPages > 0 {
-		if count, ok := pageCount(path); ok && count > maxPages {
+		if count, ok := pageCount(ctx, path); ok && count > maxPages {
 			return nil, nil, tooManyPages(path, count, maxPages)
 		}
 	}
@@ -37,9 +46,9 @@ func Render(path string, maxPages int) (pages []string, cleanup func(), err erro
 
 	var cmd *exec.Cmd
 	if binary, lookupErr := exec.LookPath("pdftoppm"); lookupErr == nil {
-		cmd = exec.Command(binary, "-png", path, filepath.Join(dir, "page"))
+		cmd = exec.CommandContext(ctx, binary, "-png", path, filepath.Join(dir, "page"))
 	} else if binary, lookupErr := exec.LookPath("mutool"); lookupErr == nil {
-		cmd = exec.Command(binary, "draw", "-o", filepath.Join(dir, "page-%d.png"), path)
+		cmd = exec.CommandContext(ctx, binary, "draw", "-o", filepath.Join(dir, "page-%d.png"), path)
 	} else {
 		cleanup()
 		return nil, nil, fmt.Errorf("render PDF: neither pdftoppm nor mutool is installed (install Poppler or MuPDF)")
@@ -47,6 +56,9 @@ func Render(path string, maxPages int) (pages []string, cleanup func(), err erro
 
 	if output, runErr := cmd.CombinedOutput(); runErr != nil {
 		cleanup()
+		if ctx.Err() == context.DeadlineExceeded {
+			return nil, nil, fmt.Errorf("render PDF %q: timed out after %s", path, renderTimeout)
+		}
 		return nil, nil, fmt.Errorf("render PDF %q: %w: %s", path, runErr, output)
 	}
 	pages, err = filepath.Glob(filepath.Join(dir, "*.png"))
@@ -69,12 +81,12 @@ func Render(path string, maxPages int) (pages []string, cleanup func(), err erro
 // pdftoppm by Poppler). The second result is false when pdfinfo is missing or
 // does not understand the file; callers then fall back to counting rendered
 // pages.
-func pageCount(path string) (int, bool) {
+func pageCount(ctx context.Context, path string) (int, bool) {
 	binary, err := exec.LookPath("pdfinfo")
 	if err != nil {
 		return 0, false
 	}
-	output, err := exec.Command(binary, path).Output()
+	output, err := exec.CommandContext(ctx, binary, path).Output()
 	if err != nil {
 		return 0, false
 	}
