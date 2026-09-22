@@ -2,6 +2,9 @@ package message
 
 import (
 	"encoding/json"
+	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	appschema "efficient-daemon/internal/schema"
@@ -73,5 +76,18 @@ func TestContextFileSchemaValidatesDocuments(t *testing.T) {
 		if err := sch.Validate(decode(t, doc)); err == nil {
 			t.Errorf("%s: invalid document accepted", name)
 		}
+	}
+}
+
+func TestContextFileSchemaFileInSync(t *testing.T) {
+	raw, err := os.ReadFile(filepath.Join("..", "..", "context.schema.json"))
+	if err != nil {
+		t.Fatalf("checked-in schema missing: %v", err)
+	}
+	got := strings.TrimRight(string(raw), "\n")
+	want := strings.TrimRight(ContextFileSchema, "\n")
+	if got != want {
+		t.Fatalf("context.schema.json is out of sync with message.ContextFileSchema; "+
+			"regenerate the file from the const (got %d bytes, want %d)", len(got), len(want))
 	}
 }

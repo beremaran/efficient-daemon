@@ -91,8 +91,11 @@ func newAskCommand() *cobra.Command {
 
 func newSchemaCommand() *cobra.Command {
 	return &cobra.Command{
-		Use:           "schema",
-		Short:         "Print the JSON Schema for context files",
+		Use:   "schema",
+		Short: "Print the JSON Schema for context files",
+		Long: "Print the JSON Schema for context files.\n\n" +
+			"The identical schema is checked into the repository as context.schema.json, " +
+			"and a test keeps the two in sync.",
 		SilenceUsage:  true,
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
