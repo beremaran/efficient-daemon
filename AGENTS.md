@@ -10,7 +10,7 @@ Single-module Go CLI (`module efficient-daemon`, Go 1.27). Sends one chat-comple
 
 ## Runtime facts worth knowing
 
-- Two subcommands: `ask [prompt]` runs the request flow (every request flag below belongs to it); `schema` prints the JSON Schema for context files.
+- Two subcommands: `ask [prompt]` runs the request flow (every request flag below belongs to it); `schema` prints the JSON Schema for context files. The same schema is checked in at `context.schema.json` (repo root) — a test keeps it byte-identical to `message.ContextFileSchema`.
 - Defaults: model `Qwen3.5-2B` at `https://llm-desktop.kwilabs.net/v1`, API key `not-needed`, request timeout `5m`. No env vars or keys required; override with `--model`, `--base-url`, `--api-key`, `--timeout` (per request attempt — the SDK's retries each get the full budget; 0 disables the timeout).
 - `--schema <file.json>` is required; the model response must be valid JSON and match the schema (validated with `santhosh-tekuri/jsonschema` in `internal/schema`).
 - `--context <file>` (YAML/JSON) is mutually exclusive with prompt, `--system`, `--system-file`, `--user-file`, and `--image`.
