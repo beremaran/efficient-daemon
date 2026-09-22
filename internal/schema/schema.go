@@ -4,8 +4,10 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"os"
 	"path/filepath"
 	"sort"
+	"strings"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -47,40 +49,160 @@ func Compile(raw []byte, sourcePath string) (*jsonschema.Schema, error) {
 	return sch, nil
 }
 
-// StrictSubsetWarnings reports the paths of object schemas that omit
+// StrictSubsetWarnings reports the locations of object schemas that omit
 // additionalProperties: false, which the strict structured-output subset
-// requires of every object. The check is best effort and advisory: $refs into
-// external files are not resolved, and lenient servers may accept the schema
-// anyway, so callers should warn rather than fail.
-func StrictSubsetWarnings(raw []byte) []string {
-	var doc any
+// requires of every object. Only schema-bearing keywords are traversed, so
+// annotation values (const, default, examples, enum) are never mistaken for
+// schemas. External $ref targets are loaded best effort relative to
+// sourcePath: local files only, capped in size, cycles skipped, and missing
+// refs ignored. The result is advisory — some servers accept schemas that
+// stricter endpoints reject.
+func StrictSubsetWarnings(raw []byte, sourcePath string) []string {
+	root := decodeObject(raw)
+	if root == nil {
+		return nil
+	}
+	var warnings []string
+	visited := map[string]bool{}
+	rootFile := absoluteSchemaPath(sourcePath)
+	visited[rootFile+"#"] = true
+
+	var walk func(node map[string]any, location, currentFile string)
+	walk = func(node map[string]any, location, currentFile string) {
+		if isObjectNode(node) && node["additionalProperties"] != false {
+			warnings = append(warnings, location)
+		}
+		// Keywords whose values are maps of schemas (property/definition
+		// names to schemas).
+		for _, key := range schemaMapKeys {
+			dict, ok := node[key].(map[string]any)
+			if !ok {
+				continue
+			}
+			for _, name := range sortedKeys(dict) {
+				if child, ok := dict[name].(map[string]any); ok {
+					walk(child, location+"."+key+"."+name, currentFile)
+				}
+			}
+		}
+		// Keywords whose value is a schema or an array of schemas.
+		for _, key := range schemaValueKeys {
+			switch value := node[key].(type) {
+			case map[string]any:
+				walk(value, location+"."+key, currentFile)
+			case []any:
+				for i, element := range value {
+					if child, ok := element.(map[string]any); ok {
+						walk(child, fmt.Sprintf("%s.%s[%d]", location, key, i), currentFile)
+					}
+				}
+			}
+		}
+		if ref, ok := node["$ref"].(string); ok {
+			walkRef(ref, currentFile, visited, walk)
+		}
+	}
+	walk(root, "$", rootFile)
+	return warnings
+}
+
+// walkRef follows an external $ref to its target schema, best effort. Internal
+// ("#/...") and remote ("scheme://...") refs are skipped: internal targets are
+// reached structurally, and remote files are neither fetched nor guessed.
+func walkRef(ref, currentFile string, visited map[string]bool, walk func(map[string]any, string, string)) {
+	base, fragment, _ := strings.Cut(ref, "#")
+	if base == "" || strings.Contains(base, "://") {
+		return
+	}
+	targetFile := base
+	if !filepath.IsAbs(targetFile) {
+		targetFile = filepath.Join(filepath.Dir(currentFile), base)
+	}
+	if abs, err := filepath.Abs(targetFile); err == nil {
+		targetFile = abs
+	}
+	key := targetFile + "#" + fragment
+	if visited[key] {
+		return
+	}
+	visited[key] = true
+
+	raw, err := readFileCap(targetFile, maxRefBytes)
+	if err != nil {
+		return
+	}
+	target := decodeObject(raw)
+	if target == nil {
+		return
+	}
+	// Navigate to the fragment, e.g. "#/$defs/Fee".
+	segments := strings.Split(strings.TrimPrefix(fragment, "/"), "/")
+	for _, segment := range segments {
+		if segment == "" {
+			break
+		}
+		child, ok := target[segment].(map[string]any)
+		if !ok {
+			return
+		}
+		target = child
+	}
+	walk(target, base+"#"+fragment, targetFile)
+}
+
+// schemaMapKeys are keywords holding a map of name to schema.
+var schemaMapKeys = []string{
+	"properties", "patternProperties", "$defs", "definitions",
+	"dependencies", "dependentSchemas",
+}
+
+// schemaValueKeys are keywords holding a schema or an array of schemas.
+var schemaValueKeys = []string{
+	"items", "prefixItems", "not", "additionalProperties", "additionalItems",
+	"contains", "if", "then", "else", "propertyNames",
+	"unevaluatedProperties", "unevaluatedItems",
+	"allOf", "anyOf", "oneOf",
+}
+
+// maxRefBytes caps reads of externally referenced schema files.
+const maxRefBytes = 10 << 20
+
+func decodeObject(raw []byte) map[string]any {
+	var doc map[string]any
 	if err := json.Unmarshal(raw, &doc); err != nil {
 		return nil
 	}
-	var paths []string
-	var walk func(node any, path string)
-	walk = func(node any, path string) {
-		switch n := node.(type) {
-		case map[string]any:
-			if isObjectNode(n) && n["additionalProperties"] != false {
-				paths = append(paths, path)
-			}
-			keys := make([]string, 0, len(n))
-			for key := range n {
-				keys = append(keys, key)
-			}
-			sort.Strings(keys) // deterministic walk order
-			for _, key := range keys {
-				walk(n[key], path+"."+key)
-			}
-		case []any:
-			for i, child := range n {
-				walk(child, fmt.Sprintf("%s[%d]", path, i))
-			}
-		}
+	return doc
+}
+
+func absoluteSchemaPath(sourcePath string) string {
+	if sourcePath == "" {
+		sourcePath = "schema.json"
 	}
-	walk(doc, "$")
-	return paths
+	if abs, err := filepath.Abs(sourcePath); err == nil {
+		return abs
+	}
+	return sourcePath
+}
+
+func readFileCap(path string, limit int64) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return nil, err
+	}
+	if !info.Mode().IsRegular() || info.Size() > limit {
+		return nil, fmt.Errorf("ref target %q is not a regular file within %d bytes", path, limit)
+	}
+	return os.ReadFile(path)
+}
+
+func sortedKeys(dict map[string]any) []string {
+	keys := make([]string, 0, len(dict))
+	for key := range dict {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys) // deterministic walk order
+	return keys
 }
 
 // isObjectNode reports whether a schema node describes an object: it has
