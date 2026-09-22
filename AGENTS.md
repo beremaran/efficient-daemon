@@ -4,9 +4,9 @@ Single-module Go CLI (`module efficient-daemon`, Go 1.27). Sends one chat-comple
 
 ## Commands
 
-- Build: `go build ./cmd/efficient-daemon`
+- Build: `make build` (or `go build -o bin/efficient-daemon ./cmd/efficient-daemon`)
 - Test: `go test ./...` (single test: `go test -run TestName ./...`)
-- No CI, lint, or task-runner config in this repo; format with `gofmt`.
+- No CI or lint config in this repo; format with `gofmt` (`make fmt`). Targets live in the `Makefile`: `build`, `test`, `fmt`, `vet`, `clean`, `help`.
 
 ## Runtime facts worth knowing
 
@@ -21,4 +21,4 @@ Single-module Go CLI (`module efficient-daemon`, Go 1.27). Sends one chat-comple
 - `internal/pdf` shells out to `pdftoppm` (Poppler) or `mutool` (MuPDF); PDF support fails without one of these system binaries installed.
 - `internal/schema.Parse` intentionally keeps schema values as raw JSON so integer constraints survive serialization — don't round-trip schemas through `map[string]any` unmarshaling.
 - The API requires the response schema `Name` to match `[a-zA-Z0-9_-]{1,64}`; `internal/core/ask.go` hardcodes `"response"` — keep a non-empty name if touching that code.
-- A local 19MB `efficient-daemon` binary at repo root is a gitignored build artifact, not source.
+- `bin/` (via `make build`) holds the gitignored binary; there is no build artifact at the repo root.
