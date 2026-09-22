@@ -36,3 +36,14 @@ func TestFromFileRejectsNonTextSystemPart(t *testing.T) {
 		t.Fatal("expected system image error")
 	}
 }
+
+func TestFromFileRejectsEmptySystem(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "context.yaml")
+	if err := os.WriteFile(path, []byte("system: \"\"\nuser: hello\n"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := FromFile(path)
+	if err == nil || err.Error() != "system message part 1 is empty" {
+		t.Fatalf("got %v, want %q", err, "system message part 1 is empty")
+	}
+}
