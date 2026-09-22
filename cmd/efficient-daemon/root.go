@@ -48,7 +48,7 @@ func newRootCommand() *cobra.Command {
 		SilenceUsage:  true,
 		SilenceErrors: true,
 	}
-	cmd.AddCommand(newAskCommand())
+	cmd.AddCommand(newAskCommand(), newSchemaCommand())
 	return cmd
 }
 
@@ -87,6 +87,20 @@ func newAskCommand() *cobra.Command {
 	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
 	_ = cmd.MarkFlagRequired("schema")
 	return cmd
+}
+
+func newSchemaCommand() *cobra.Command {
+	return &cobra.Command{
+		Use:           "schema",
+		Short:         "Print the JSON Schema for context files",
+		SilenceUsage:  true,
+		SilenceErrors: true,
+		Args:          cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			_, err := fmt.Fprintln(cmd.OutOrStdout(), message.ContextFileSchema)
+			return err
+		},
+	}
 }
 
 func validateInputs(opts options, args []string) error {

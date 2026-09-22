@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -120,6 +121,31 @@ func TestCommandHonorsTimeout(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > time.Second {
 		t.Fatalf("request took %v, want failure near the 100ms timeout", elapsed)
+	}
+}
+
+func TestSchemaCommandPrintsContextSchema(t *testing.T) {
+	cmd := newRootCommand()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"schema"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	var doc map[string]any
+	if err := json.Unmarshal(stdout.Bytes(), &doc); err != nil {
+		t.Fatalf("output is not valid JSON: %v\n%s", err, stdout.String())
+	}
+	if doc["type"] != "object" {
+		t.Fatalf("root type = %v, want object", doc["type"])
+	}
+}
+
+func TestAskStillRequiresSchemaFlag(t *testing.T) {
+	cmd := newRootCommand()
+	cmd.SetArgs([]string{"ask", "hello"})
+	if err := cmd.Execute(); err == nil {
+		t.Fatal("expected required --schema flag error")
 	}
 }
 
