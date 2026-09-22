@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"path/filepath"
+	"sort"
 
 	"github.com/santhosh-tekuri/jsonschema/v5"
 )
@@ -44,4 +45,59 @@ func Compile(raw []byte, sourcePath string) (*jsonschema.Schema, error) {
 		return nil, fmt.Errorf("compile schema: %w", err)
 	}
 	return sch, nil
+}
+
+// StrictSubsetWarnings reports the paths of object schemas that omit
+// additionalProperties: false, which the strict structured-output subset
+// requires of every object. The check is best effort and advisory: $refs into
+// external files are not resolved, and lenient servers may accept the schema
+// anyway, so callers should warn rather than fail.
+func StrictSubsetWarnings(raw []byte) []string {
+	var doc any
+	if err := json.Unmarshal(raw, &doc); err != nil {
+		return nil
+	}
+	var paths []string
+	var walk func(node any, path string)
+	walk = func(node any, path string) {
+		switch n := node.(type) {
+		case map[string]any:
+			if isObjectNode(n) && n["additionalProperties"] != false {
+				paths = append(paths, path)
+			}
+			keys := make([]string, 0, len(n))
+			for key := range n {
+				keys = append(keys, key)
+			}
+			sort.Strings(keys) // deterministic walk order
+			for _, key := range keys {
+				walk(n[key], path+"."+key)
+			}
+		case []any:
+			for i, child := range n {
+				walk(child, fmt.Sprintf("%s[%d]", path, i))
+			}
+		}
+	}
+	walk(doc, "$")
+	return paths
+}
+
+// isObjectNode reports whether a schema node describes an object: it has
+// properties, or its type is (or includes) "object".
+func isObjectNode(node map[string]any) bool {
+	if _, ok := node["properties"].(map[string]any); ok {
+		return true
+	}
+	switch t := node["type"].(type) {
+	case string:
+		return t == "object"
+	case []any:
+		for _, one := range t {
+			if one == "object" {
+				return true
+			}
+		}
+	}
+	return false
 }
