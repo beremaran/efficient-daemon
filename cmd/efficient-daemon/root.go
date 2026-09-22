@@ -73,7 +73,7 @@ func newRootCommand() *cobra.Command {
 	flags.StringVar(&opts.reasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
 	flags.Float64Var(&opts.temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&opts.maxTokens, "max-tokens", 0, "maximum tokens to generate")
-	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "request timeout; 0 disables it")
+	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
 	_ = cmd.MarkPersistentFlagRequired("schema")
 	return cmd
 }
