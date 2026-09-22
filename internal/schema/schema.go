@@ -45,12 +45,3 @@ func Compile(raw []byte, sourcePath string) (*jsonschema.Schema, error) {
 	}
 	return sch, nil
 }
-
-// Validate checks that data conforms to the JSON Schema read from sourcePath.
-func Validate(rawSchema []byte, data any, sourcePath string) error {
-	sch, err := Compile(rawSchema, sourcePath)
-	if err != nil {
-		return err
-	}
-	return sch.Validate(data)
-}
