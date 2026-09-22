@@ -76,9 +76,12 @@ func FromFile(path string) ([]openai.ChatCompletionMessageParamUnion, error) {
 	var result []openai.ChatCompletionMessageParamUnion
 	if len(doc.System.Parts) > 0 {
 		var texts []string
-		for _, p := range doc.System.Parts {
-			if p.Text == "" || p.Image != "" || p.PDF != "" {
+		for i, p := range doc.System.Parts {
+			if p.Image != "" || p.PDF != "" {
 				return nil, fmt.Errorf("system message supports text parts only")
+			}
+			if p.Text == "" {
+				return nil, fmt.Errorf("system message part %d is empty", i+1)
 			}
 			texts = append(texts, p.Text)
 		}
@@ -107,8 +110,11 @@ func buildParts(parts []part, base string) ([]openai.ChatCompletionContentPartUn
 		if p.PDF != "" {
 			count++
 		}
-		if count != 1 {
-			return nil, fmt.Errorf("message part %d must set exactly one of text, image, or pdf", i+1)
+		switch {
+		case count == 0:
+			return nil, fmt.Errorf("message part %d is empty (set exactly one of text, image, or pdf)", i+1)
+		case count > 1:
+			return nil, fmt.Errorf("message part %d must set only one of text, image, or pdf", i+1)
 		}
 		switch {
 		case p.Text != "":
