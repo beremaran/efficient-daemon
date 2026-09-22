@@ -1,36 +1,30 @@
 package output
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"io"
 )
 
+// Write renders raw JSON in the requested format: "json" for compact output or
+// "json-pretty" for indented output. Formatting operates on the raw bytes so
+// numbers, string escapes, and key order pass through unchanged.
 func Write(w io.Writer, raw json.RawMessage, format string) error {
-	var data []byte
+	var buf bytes.Buffer
 	var err error
 	switch format {
 	case "json":
-		data, err = compact(raw)
+		err = json.Compact(&buf, raw)
 	case "json-pretty":
-		var value any
-		if err = json.Unmarshal(raw, &value); err == nil {
-			data, err = json.MarshalIndent(value, "", "  ")
-		}
+		err = json.Indent(&buf, raw, "", "  ")
 	default:
 		return fmt.Errorf("invalid output format %q (want json or json-pretty)", format)
 	}
 	if err != nil {
 		return fmt.Errorf("format output: %w", err)
 	}
-	_, err = fmt.Fprintln(w, string(data))
+	buf.WriteByte('\n')
+	_, err = w.Write(buf.Bytes())
 	return err
-}
-
-func compact(raw []byte) ([]byte, error) {
-	var value any
-	if err := json.Unmarshal(raw, &value); err != nil {
-		return nil, err
-	}
-	return json.Marshal(value)
 }
