@@ -15,6 +15,13 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+// Guard limits for inline media. They bound the size of a single request so a
+// runaway attachment fails fast instead of producing an oversized payload.
+const (
+	maxImageBytes = 20 << 20 // 20 MiB per local image file
+	maxPDFPages   = 100      // pages rasterized per PDF
+)
+
 type contextFile struct {
 	System message `yaml:"system"`
 	User   message `yaml:"user"`
@@ -166,6 +173,9 @@ func imageParts(ref, base string) ([]openai.ChatCompletionContentPartUnionParam,
 	if isPDF(path, raw) {
 		return renderPDF(path)
 	}
+	if len(raw) > maxImageBytes {
+		return nil, fmt.Errorf("image %q is %.1f MB; the maximum is %d MB", path, float64(len(raw))/(1<<20), maxImageBytes/(1<<20))
+	}
 	dataURL, err := localDataURL(path, raw)
 	if err != nil {
 		return nil, err
@@ -180,6 +190,9 @@ func renderPDF(path string) ([]openai.ChatCompletionContentPartUnionParam, error
 		return nil, err
 	}
 	defer cleanup()
+	if len(pages) > maxPDFPages {
+		return nil, fmt.Errorf("PDF %q has %d pages; the maximum is %d (split the document)", path, len(pages), maxPDFPages)
+	}
 	result := make([]openai.ChatCompletionContentPartUnionParam, 0, len(pages))
 	for _, page := range pages {
 		raw, readErr := os.ReadFile(page)
