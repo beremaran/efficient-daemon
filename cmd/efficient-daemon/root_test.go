@@ -33,6 +33,31 @@ func TestValidateInputs(t *testing.T) {
 	}
 }
 
+func TestDecodeResponseKeepsIntegerPrecision(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = fmt.Fprint(w, `{"id":"test","object":"chat.completion","created":0,"model":"test","choices":[{"index":0,"message":{"role":"assistant","content":"{\"i\":123456789012345678}"},"finish_reason":"stop"}]}`)
+	}))
+	defer server.Close()
+
+	schemaPath := filepath.Join(t.TempDir(), "schema.json")
+	schema := `{"type":"object","properties":{"i":{"const":123456789012345678}},"required":["i"],"additionalProperties":false}`
+	if err := os.WriteFile(schemaPath, []byte(schema), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRootCommand()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"--base-url", server.URL, "--model", "test", "--schema", schemaPath, "hello"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatalf("large integer failed validation: %v", err)
+	}
+	if got, want := stdout.String(), "{\n  \"i\": 123456789012345678\n}\n"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
 func TestCommandEndToEnd(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
