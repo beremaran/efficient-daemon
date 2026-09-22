@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 )
 
 func TestValidateInputs(t *testing.T) {
@@ -55,6 +56,32 @@ func TestDecodeResponseKeepsIntegerPrecision(t *testing.T) {
 	}
 	if got, want := stdout.String(), "{\n  \"i\": 123456789012345678\n}\n"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestCommandHonorsTimeout(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		select {
+		case <-time.After(2 * time.Second):
+		case <-r.Context().Done():
+		}
+	}))
+	defer server.Close()
+
+	schemaPath := filepath.Join(t.TempDir(), "schema.json")
+	if err := os.WriteFile(schemaPath, []byte(`{"type":"object"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRootCommand()
+	cmd.SetArgs([]string{"--base-url", server.URL, "--model", "test", "--schema", schemaPath, "--timeout", "100ms", "hello"})
+	start := time.Now()
+	err := cmd.Execute()
+	if err == nil {
+		t.Fatal("expected timeout error")
+	}
+	if elapsed := time.Since(start); elapsed > time.Second {
+		t.Fatalf("request took %v, want failure near the 100ms timeout", elapsed)
 	}
 }
 
