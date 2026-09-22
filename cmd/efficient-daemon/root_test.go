@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -56,6 +57,21 @@ func TestDecodeResponseKeepsIntegerPrecision(t *testing.T) {
 	}
 	if got, want := stdout.String(), "{\n  \"i\": 123456789012345678\n}\n"; got != want {
 		t.Fatalf("got %q, want %q", got, want)
+	}
+}
+
+func TestRunRejectsOutOfRangeTemperature(t *testing.T) {
+	schemaPath := filepath.Join(t.TempDir(), "schema.json")
+	if err := os.WriteFile(schemaPath, []byte(`{"type":"object"}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	for _, value := range []string{"-0.5", "2.5"} {
+		cmd := newRootCommand()
+		cmd.SetArgs([]string{"--base-url", "http://127.0.0.1:1", "--schema", schemaPath, "--temperature", value, "hello"})
+		err := cmd.Execute()
+		if err == nil || !strings.Contains(err.Error(), "--temperature must be between 0 and 2") {
+			t.Fatalf("temperature %s: got %v, want range error", value, err)
+		}
 	}
 }
 
