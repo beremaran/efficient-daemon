@@ -1,12 +1,116 @@
-# Compiled binary
+# ============================================
+# Go
+# ============================================
+# Compiled binaries / executables
+/*.exe
+/*.exe~
+/*.dll
+/*.so
+/*.dylib
+/*.test
+/*.out
+
+# The daemon binary (matches the module name)
 /efficient-daemon
 
-# Go build artifacts
-*.exe
-*.out
-*.dll
+# Build artifacts
+/dist/
+/bin/
+/build/
 
-# IDEs
+# Test and coverage artifacts
+coverage.txt
+coverage.html
+coverage.xml
+*.cover
+*.prof
+*.out
+
+# Go workspace file
+go.work
+go.work.sum
+
+# ============================================
+# Editor / IDE
+# ============================================
+# VS Code
+.vscode/
+
+# JetBrains (GoLand, IntelliJ, etc.)
 .idea/
 *.iml
-.vscode/
+
+# Visual Studio / Windows
+.vs/
+*.user
+
+# macOS Finder / metadata
+.DS_Store
+
+# ============================================
+# Environment / secrets
+# ============================================
+.env
+.env.*
+!.env.example
+
+# ============================================
+# Logs
+# ============================================
+*.log
+logs/
+*.log.*
+
+# ============================================
+# OS files
+# ============================================
+# Windows
+Thumbs.db
+# Windows installer files
+*.cab
+*.msi
+*.msix
+*.msixbundle
+# Windows library files
+*.lib
+*.rip
+
+# macOS
+.AppleDouble
+.LSOverride
+Icon
+._*
+
+# Linux
+*~
+
+# ============================================
+# Databases / data
+# ============================================
+*.sqlite
+*.sqlite3
+*.db
+*.db-journal
+
+# ============================================
+# Node / JS (in case of web tooling)
+# ============================================
+node_modules/
+npm-debug.log
+yarn-debug.log
+yarn-error.log
+pnpm-debug.log
+
+# ============================================
+# Terraform / infra (in case added later)
+# ============================================
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+!.tfvars.example
+
+# ============================================
+# Docker
+# ============================================
+docker-compose.override.yml
