@@ -155,3 +155,26 @@ func TestFromFileSupportsAnchorsAndMergeKeys(t *testing.T) {
 		t.Fatalf("merged content missing from messages: %s", encoded)
 	}
 }
+
+func TestFromFileRejectsMultipleDocuments(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "context.yaml")
+	context := "system: a\nuser: first\n---\nsystem: b\nuser: second\n"
+	if err := os.WriteFile(path, []byte(context), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := FromFile(path)
+	if err == nil || !strings.Contains(err.Error(), "single YAML document") {
+		t.Fatalf("got %v, want single-document error", err)
+	}
+}
+
+func TestFromFileRejectsEmptyFile(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "context.yaml")
+	if err := os.WriteFile(path, nil, 0o600); err != nil {
+		t.Fatal(err)
+	}
+	_, err := FromFile(path)
+	if err == nil || !strings.Contains(err.Error(), "is empty") {
+		t.Fatalf("got %v, want empty-file error", err)
+	}
+}
