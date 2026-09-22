@@ -36,6 +36,9 @@ type options struct {
 // version is the CLI version reported by --version.
 const version = "0.1.0"
 
+// maxTextBytes bounds prompt files the same way media files are bounded.
+const maxTextBytes = 10 << 20 // 10 MiB per prompt file
+
 func newRootCommand() *cobra.Command {
 	var opts options
 	cmd := &cobra.Command{
@@ -165,22 +168,43 @@ func buildMessages(opts options, args []string) ([]openai.ChatCompletionMessageP
 	}
 	system := opts.system
 	if opts.systemFile != "" {
-		raw, err := os.ReadFile(opts.systemFile)
+		var err error
+		system, err = readPromptFile("system message", opts.systemFile)
 		if err != nil {
-			return nil, fmt.Errorf("read system message %q: %w", opts.systemFile, err)
+			return nil, err
 		}
-		system = string(raw)
 	}
 	user := ""
 	if len(args) == 1 {
 		user = args[0]
 	}
 	if opts.userFile != "" {
-		raw, err := os.ReadFile(opts.userFile)
+		var err error
+		user, err = readPromptFile("user message", opts.userFile)
 		if err != nil {
-			return nil, fmt.Errorf("read user message %q: %w", opts.userFile, err)
+			return nil, err
 		}
-		user = string(raw)
 	}
 	return message.FromSimple(system, user, opts.images)
+}
+
+// readPromptFile loads a prompt file only after confirming it is a regular
+// file within the size limit, so a stray disk image or device path fails fast
+// instead of being read into memory (or blocking forever).
+func readPromptFile(kind, path string) (string, error) {
+	info, err := os.Stat(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s %q: %w", kind, path, err)
+	}
+	if !info.Mode().IsRegular() {
+		return "", fmt.Errorf("%s %q is not a regular file", kind, path)
+	}
+	if info.Size() > maxTextBytes {
+		return "", fmt.Errorf("%s %q is %.1f MB; the maximum is %d MB", kind, path, float64(info.Size())/(1<<20), maxTextBytes/(1<<20))
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", fmt.Errorf("read %s %q: %w", kind, path, err)
+	}
+	return string(raw), nil
 }

@@ -60,6 +60,27 @@ func TestDecodeResponseKeepsIntegerPrecision(t *testing.T) {
 	}
 }
 
+func TestReadPromptFileGuards(t *testing.T) {
+	dir := t.TempDir()
+
+	big := filepath.Join(dir, "big.txt")
+	file, err := os.Create(big)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := file.Truncate(maxTextBytes + 1); err != nil {
+		t.Fatal(err)
+	}
+	_ = file.Close()
+	if _, err := readPromptFile("user message", big); err == nil {
+		t.Fatal("expected oversized prompt file error")
+	}
+
+	if _, err := readPromptFile("system message", os.DevNull); err == nil {
+		t.Fatal("expected non-regular file error")
+	}
+}
+
 func TestRunRejectsOutOfRangeTemperature(t *testing.T) {
 	schemaPath := filepath.Join(t.TempDir(), "schema.json")
 	if err := os.WriteFile(schemaPath, []byte(`{"type":"object"}`), 0o600); err != nil {
