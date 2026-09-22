@@ -1,6 +1,7 @@
 package message
 
 import (
+	"bytes"
 	"encoding/base64"
 	"fmt"
 	"mime"
@@ -114,42 +115,77 @@ func buildParts(parts []part, base string) ([]openai.ChatCompletionContentPartUn
 			text := openai.ChatCompletionContentPartTextParam{Text: p.Text}
 			result = append(result, openai.ChatCompletionContentPartUnionParam{OfText: &text})
 		case p.Image != "":
-			imageURL, err := resolveImage(p.Image, base)
+			imageParts, err := imageParts(p.Image, base)
 			if err != nil {
 				return nil, err
 			}
-			result = append(result, imagePart(imageURL))
+			result = append(result, imageParts...)
 		case p.PDF != "":
-			path := resolvePath(p.PDF, base)
-			pages, cleanup, err := pdf.Render(path)
+			pdfResult, err := renderPDF(resolvePath(p.PDF, base))
 			if err != nil {
 				return nil, err
 			}
-			for _, page := range pages {
-				imageURL, encodeErr := localDataURL(page)
-				if encodeErr != nil {
-					cleanup()
-					return nil, encodeErr
-				}
-				result = append(result, imagePart(imageURL))
-			}
-			cleanup()
+			result = append(result, pdfResult...)
 		}
 	}
 	return result, nil
 }
 
+// imageParts resolves an image reference into one or more image parts. Local
+// PDF files are rasterized page by page; remote or data-URL PDFs are rejected
+// because they cannot be rasterized without first writing them to disk.
+func imageParts(ref, base string) ([]openai.ChatCompletionContentPartUnionParam, error) {
+	parsed, err := url.Parse(ref)
+	if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https" || parsed.Scheme == "data") {
+		isRemotePDF := parsed.Scheme == "data" && strings.HasPrefix(strings.ToLower(ref), "data:application/pdf")
+		isURLPDF := parsed.Scheme != "data" && strings.HasSuffix(strings.ToLower(parsed.Path), ".pdf")
+		if isRemotePDF || isURLPDF {
+			return nil, fmt.Errorf("remote PDF %q is not supported; save it to a local file and reference the path", ref)
+		}
+		return []openai.ChatCompletionContentPartUnionParam{imagePart(ref)}, nil
+	}
+
+	path := resolvePath(ref, base)
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return nil, fmt.Errorf("read image %q: %w", path, err)
+	}
+	if isPDF(path, raw) {
+		return renderPDF(path)
+	}
+	dataURL, err := localDataURL(path, raw)
+	if err != nil {
+		return nil, err
+	}
+	return []openai.ChatCompletionContentPartUnionParam{imagePart(dataURL)}, nil
+}
+
+// renderPDF rasterizes a local PDF file and returns one image part per page.
+func renderPDF(path string) ([]openai.ChatCompletionContentPartUnionParam, error) {
+	pages, cleanup, err := pdf.Render(path)
+	if err != nil {
+		return nil, err
+	}
+	defer cleanup()
+	result := make([]openai.ChatCompletionContentPartUnionParam, 0, len(pages))
+	for _, page := range pages {
+		raw, readErr := os.ReadFile(page)
+		if readErr != nil {
+			return nil, fmt.Errorf("read rendered page %q: %w", page, readErr)
+		}
+		dataURL := "data:image/png;base64," + base64.StdEncoding.EncodeToString(raw)
+		result = append(result, imagePart(dataURL))
+	}
+	return result, nil
+}
+
+func isPDF(path string, raw []byte) bool {
+	return strings.EqualFold(filepath.Ext(path), ".pdf") || bytes.HasPrefix(raw, []byte("%PDF"))
+}
+
 func imagePart(value string) openai.ChatCompletionContentPartUnionParam {
 	image := openai.ChatCompletionContentPartImageParam{ImageURL: openai.ChatCompletionContentPartImageImageURLParam{URL: value}}
 	return openai.ChatCompletionContentPartUnionParam{OfImageURL: &image}
-}
-
-func resolveImage(value, base string) (string, error) {
-	parsed, err := url.Parse(value)
-	if err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https" || parsed.Scheme == "data") {
-		return value, nil
-	}
-	return localDataURL(resolvePath(value, base))
 }
 
 func resolvePath(path, base string) string {
@@ -159,11 +195,7 @@ func resolvePath(path, base string) string {
 	return filepath.Join(base, path)
 }
 
-func localDataURL(path string) (string, error) {
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return "", fmt.Errorf("read image %q: %w", path, err)
-	}
+func localDataURL(path string, raw []byte) (string, error) {
 	mediaType := mime.TypeByExtension(strings.ToLower(filepath.Ext(path)))
 	if mediaType == "" {
 		mediaType = "application/octet-stream"
