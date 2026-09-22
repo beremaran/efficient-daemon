@@ -9,38 +9,6 @@ type BotContext interface {
 	Messages() []openai.ChatCompletionMessageParamUnion
 }
 
-// SimpleBotContext is a BotContext backed by a single system and a single user
-// message. It is the simplest way to drive Ask/AskSchema.
-type SimpleBotContext struct {
-	systemMessage string
-	userMessage   string
-}
-
-// NewSimpleBotContext returns a BotContext with the given system and user
-// messages. An empty system message is omitted from the request.
-func NewSimpleBotContext(systemMessage, userMessage string) BotContext {
-	return &SimpleBotContext{
-		systemMessage: systemMessage,
-		userMessage:   userMessage,
-	}
-}
-
-// Messages implements [BotContext].
-func (s *SimpleBotContext) Messages() []openai.ChatCompletionMessageParamUnion {
-	var messages []openai.ChatCompletionMessageParamUnion
-
-	if s.systemMessage != "" {
-		messages = append(messages, openai.SystemMessage(s.systemMessage))
-	}
-
-	return append(messages, openai.UserMessage(s.userMessage))
-}
-
-// Model implements [BotContext].
-func (s *SimpleBotContext) Model() string {
-	return DefaultModel
-}
-
 // MessagesContext is a BotContext built from an explicit model string and an
 // arbitrary (possibly multimodal) list of messages.
 type MessagesContext struct {
