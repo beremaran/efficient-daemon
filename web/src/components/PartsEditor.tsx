@@ -121,7 +121,7 @@ function PartEditor({
           {part.kind === "text" && <Type className="h-4 w-4" />}
           {part.kind === "image" && <ImageIcon className="h-4 w-4" />}
           {part.kind === "pdf" && <FileText className="h-4 w-4" />}
-          <span className="capitalize">{part.kind}</span>
+          <span className="capitalize">{part.kind === "pdf" ? "PDF" : part.kind}</span>
         </CardTitle>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={() => onMove(-1)} disabled={index === 0} aria-label="move up">

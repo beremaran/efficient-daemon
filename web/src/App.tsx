@@ -19,7 +19,6 @@ import type { Part, RunRecord, Settings } from "@/lib/types";
 
 const IDLE_STATE: RunState = {
   running: false,
-  startedAt: null,
   status: null,
   latencyMs: null,
   responseText: "",
@@ -34,7 +33,6 @@ export default function App() {
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
   const [linting, setLinting] = useState(false);
   const [run, setRun] = useState<RunState>(IDLE_STATE);
-  const [elapsed, setElapsed] = useState(0);
   const abortController = useRef<AbortController | null>(null);
 
   const debouncedSchema = useDebounced(draft.schema, 300);
@@ -54,13 +52,6 @@ export default function App() {
       })
       .catch(() => {});
   }, []);
-
-  // Elapsed-timer ticker while a run is in flight.
-  useEffect(() => {
-    if (!run.running) return;
-    const t = setInterval(() => setElapsed(Date.now() - (run.startedAt ?? 0)), 100);
-    return () => clearInterval(t);
-  }, [run.running, run.startedAt]);
 
   const runLint = useCallback(async (schema: string) => {
     setLinting(true);
@@ -102,8 +93,7 @@ export default function App() {
     const startedAt = Date.now();
     const controller = new AbortController();
     abortController.current = controller;
-    setRun({ ...IDLE_STATE, running: true, startedAt, requestPreview: requestPreview });
-    setElapsed(0);
+    setRun({ ...IDLE_STATE, running: true, requestPreview });
     try {
       const res = await fetch("/ask", {
         method: "POST",
@@ -116,7 +106,6 @@ export default function App() {
       const text = await res.text();
       const state: RunState = {
         running: false,
-        startedAt,
         status: res.status,
         latencyMs,
         responseText: text,
@@ -136,13 +125,12 @@ export default function App() {
       });
     } catch (err) {
       if (controller.signal.aborted) {
-        setRun({ ...IDLE_STATE, startedAt, cancelled: true, requestPreview });
+        setRun({ ...IDLE_STATE, cancelled: true, requestPreview });
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
       setRun({
         running: false,
-        startedAt,
         status: null,
         latencyMs: null,
         responseText: "",
@@ -272,8 +260,8 @@ export default function App() {
             </TabsList>
             <Card className="flex min-h-0 flex-1 flex-col">
               <CardContent className="flex min-h-0 flex-1 flex-col pt-4">
-                <TabsContent value="response">
-                  <ResponsePanel state={run} elapsedMs={elapsed} />
+                <TabsContent value="response" className="flex min-h-0 flex-1 flex-col">
+                  <ResponsePanel state={run} />
                 </TabsContent>
                 <TabsContent value="codegen" className="flex flex-col">
                   <CodegenPanel
