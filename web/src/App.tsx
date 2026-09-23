@@ -264,18 +264,18 @@ export default function App() {
         </section>
 
         <section className="flex min-w-0 flex-1 flex-col lg:min-h-0">
-          <Card className="flex min-h-0 flex-1 flex-col">
-            <CardContent className="flex min-h-0 flex-1 flex-col pt-4">
-              <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col">
-                <TabsList>
-                  <TabsTrigger value="response">Response</TabsTrigger>
-                  <TabsTrigger value="codegen">Codegen</TabsTrigger>
-                  <TabsTrigger value="history">History</TabsTrigger>
-                </TabsList>
+          <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col gap-3">
+            <TabsList className="self-start">
+              <TabsTrigger value="response">Response</TabsTrigger>
+              <TabsTrigger value="codegen">Codegen</TabsTrigger>
+              <TabsTrigger value="history">History</TabsTrigger>
+            </TabsList>
+            <Card className="flex min-h-0 flex-1 flex-col">
+              <CardContent className="flex min-h-0 flex-1 flex-col pt-4">
                 <TabsContent value="response">
                   <ResponsePanel state={run} elapsedMs={elapsed} />
                 </TabsContent>
-                <TabsContent value="codegen">
+                <TabsContent value="codegen" className="flex flex-col">
                   <CodegenPanel
                     parts={draft.parts}
                     system={draft.system}
@@ -286,9 +286,9 @@ export default function App() {
                 <TabsContent value="history">
                   <HistoryPanel history={history} onRestore={restore} onClear={clear} />
                 </TabsContent>
-              </Tabs>
-            </CardContent>
-          </Card>
+              </CardContent>
+            </Card>
+          </Tabs>
         </section>
       </main>
     </div>
