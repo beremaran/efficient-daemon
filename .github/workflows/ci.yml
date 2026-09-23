@@ -41,3 +41,7 @@ jobs:
       - run: npm run build
         working-directory: web
       - run: git diff --exit-code -- internal/workbench/dist THIRD_PARTY_NOTICES.md THIRD_PARTY_LICENSES
+      - name: Validate Docker Compose and build the image
+        run: |
+          docker compose config --quiet
+          docker build --tag efficient-daemon:ci .

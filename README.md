@@ -89,7 +89,7 @@ For a local build, copy `.env.example` to `.env`, set `EFFICIENT_DAEMON_BASE_URL
 docker compose up --build -d
 ```
 
-The API key is optional; set `EFFICIENT_DAEMON_API_KEY` only when the provider requires it. You can also leave the base URL and model unset and provide both with each `POST /ask` request. The workbench is at `http://localhost:8080/`, and the API docs are at `http://localhost:8080/docs`.
+The API key is optional; set `EFFICIENT_DAEMON_API_KEY` only when the provider requires it. You can also leave the base URL and model unset and provide both with each `POST /ask` request. The workbench is at `http://localhost:8080/`, and the API docs are at `http://localhost:8080/docs`. Stop the service with `docker compose down`.
 
 Each `serve` flag also accepts a matching `EFFICIENT_DAEMON_` environment variable; explicit CLI flags take precedence. Set `EFFICIENT_DAEMON_PUBLISHED_PORT` to change the host port, while `EFFICIENT_DAEMON_PORT` changes the port inside the container.
 
