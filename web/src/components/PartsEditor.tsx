@@ -141,7 +141,7 @@ function PartEditor({
             value={part.text ?? ""}
             onChange={(e) => onChange({ text: e.target.value })}
             placeholder="Text content…"
-            className="min-h-[80px]"
+            className="min-h-[160px]"
           />
         )}
         {part.kind === "image" && <ImagePartEditor part={part} onChange={onChange} />}
