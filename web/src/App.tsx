@@ -184,8 +184,8 @@ export default function App() {
         lintIssues={lintIssuesCount(lintResult, linting)}
         onRun={runRequest}
       />
-      <main className="flex min-h-0 flex-1 gap-4 overflow-hidden p-4">
-        <section className="flex w-[460px] shrink-0 flex-col gap-4 overflow-auto pr-1">
+      <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row lg:overflow-hidden">
+        <section className="flex w-full shrink-0 flex-col gap-4 lg:w-[460px] lg:overflow-auto lg:pr-1">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Connection & sampling</CardTitle>
@@ -242,7 +242,7 @@ export default function App() {
           </Card>
         </section>
 
-        <section className="flex min-w-0 flex-1 flex-col">
+        <section className="flex min-w-0 flex-1 flex-col lg:min-h-0">
           <Card className="flex min-h-0 flex-1 flex-col">
             <CardContent className="flex min-h-0 flex-1 flex-col pt-4">
               <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col">

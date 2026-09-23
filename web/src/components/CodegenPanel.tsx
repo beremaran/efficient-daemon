@@ -28,16 +28,19 @@ export function CodegenPanel({
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState(false);
 
-  const snippets = useMemo(
-    () => generateSnippets(parts, system, schema, settings, window.location.origin),
-    [parts, system, schema, settings],
-  );
+  const snippets = useMemo(() => {
+    try {
+      return generateSnippets(parts, system, schema, settings, window.location.origin);
+    } catch {
+      return [];
+    }
+  }, [parts, system, schema, settings]);
 
   const current = snippets.find((s) => s.label === prettyLabel(lang)) ?? snippets[0];
-  const display = elideBase64(current.code);
+  const display = current ? elideBase64(current.code) : "Fix the response schema to generate code.";
 
   const copy = async () => {
-    if (await copyText(current.code)) {
+    if (current && await copyText(current.code)) {
       setCopied(true);
       setTimeout(() => setCopied(false), 1500);
     }
@@ -56,7 +59,7 @@ export function CodegenPanel({
           </TabsList>
         </Tabs>
         <span className="flex-1" />
-        <Button variant="secondary" size="sm" onClick={copy}>
+        <Button variant="secondary" size="sm" onClick={copy} disabled={!current}>
           {copied ? "Copied!" : "Copy (full, untruncated)"}
         </Button>
       </div>
