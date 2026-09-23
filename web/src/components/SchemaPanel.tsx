@@ -14,7 +14,16 @@ import type { LintResult } from "@/lib/lint";
 import { run as jsonTypegenRun } from "json_typegen_wasm";
 
 function generateSchema(sample: string): string {
-  return jsonTypegenRun("Root", sample, JSON.stringify({ output_mode: "json_schema" }));
+  const schema = JSON.parse(jsonTypegenRun("Root", sample, JSON.stringify({ output_mode: "json_schema" })));
+  const closeObjects = (value: unknown): void => {
+    if (!value || typeof value !== "object") return;
+    if (Array.isArray(value)) return value.forEach(closeObjects);
+    const node = value as Record<string, unknown>;
+    if (node.type === "object" || node.properties) node.additionalProperties = false;
+    Object.values(node).forEach(closeObjects);
+  };
+  closeObjects(schema);
+  return JSON.stringify(schema, null, 2);
 }
 
 export function SchemaPanel({
