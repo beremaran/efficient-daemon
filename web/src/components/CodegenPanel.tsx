@@ -47,7 +47,7 @@ export function CodegenPanel({
   };
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col gap-2">
+    <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2">
         <Tabs value={lang} onValueChange={(v) => setLang(v as Lang)}>
           <TabsList>
@@ -66,12 +66,13 @@ export function CodegenPanel({
       <div className="text-xs text-muted-foreground">
         Long base64 is elided in the display only; copying always yields the complete snippet.
       </div>
-      <div className="h-[320px] overflow-hidden rounded-md border">
+      <div className="h-[50vh] min-h-[320px] flex-1 overflow-hidden rounded-md border lg:h-auto">
         <CodeMirror
           value={display}
-          height="320px"
+          height="100%"
           theme={oneDark}
           editable={false}
+          className="text-xs"
           basicSetup={{ lineNumbers: true, foldGutter: false }}
         />
       </div>
