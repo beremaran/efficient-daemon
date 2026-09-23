@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -21,13 +22,17 @@ const testSchema = `{"type":"object","properties":{"answer":{"type":"string"}},"
 func newUpstream(t *testing.T, content string, seen func(body []byte)) *httptest.Server {
 	t.Helper()
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		buf := make([]byte, r.ContentLength)
-		_, _ = r.Body.Read(buf)
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		buf, _ := io.ReadAll(r.Body)
 		if seen != nil {
 			seen(buf)
 		}
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprintf(w, `{"id":"test","object":"chat.completion","created":0,"model":"test","choices":[{"index":0,"message":{"role":"assistant","content":%q},"finish_reason":"stop"}]}`, content)
+		w.Header().Set("Content-Type", "text/event-stream")
+		_, _ = fmt.Fprintf(w, "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":%q},\"finish_reason\":\"stop\"}]}\n\n", content)
+		_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
 	}))
 }
 
@@ -169,7 +174,19 @@ func TestAskUpstreamErrorIs502(t *testing.T) {
 }
 
 func TestAskTimeoutIs504(t *testing.T) {
+	type streamRequest struct{ id, path string }
+	started := make(chan streamRequest, 1)
+	stopped := make(chan streamRequest, 1)
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		request := streamRequest{id: r.Header.Get("X-Conversation-Id"), path: r.URL.Path}
+		if r.Method == http.MethodDelete {
+			request.id = r.URL.Query().Get("conv_id")
+			stopped <- request
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
+		started <- request
 		select {
 		case <-time.After(5 * time.Second):
 		case <-r.Context().Done():
@@ -185,6 +202,23 @@ func TestAskTimeoutIs504(t *testing.T) {
 	}
 	if elapsed := time.Since(start); elapsed > 2*time.Second {
 		t.Fatalf("request took %v, want failure near the 50ms timeout", elapsed)
+	}
+	var startRequest, stopRequest streamRequest
+	select {
+	case startRequest = <-started:
+	case <-time.After(time.Second):
+		t.Fatal("upstream did not receive the completion stream")
+	}
+	select {
+	case stopRequest = <-stopped:
+	case <-time.After(time.Second):
+		t.Fatal("upstream stop request was not sent after timeout")
+	}
+	if startRequest.id == "" || stopRequest.id != startRequest.id {
+		t.Fatalf("timeout stopped conversation %q, want %q", stopRequest.id, startRequest.id)
+	}
+	if stopRequest.path != "/stream" {
+		t.Fatalf("stop path = %q, want /stream", stopRequest.path)
 	}
 }
 

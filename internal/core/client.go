@@ -1,6 +1,11 @@
 package core
 
 import (
+	"context"
+	"fmt"
+	"net/http"
+	"net/url"
+	"strings"
 	"time"
 
 	"github.com/openai/openai-go/v3"
@@ -20,15 +25,24 @@ const (
 type Config struct {
 	BaseURL string
 	APIKey  string
-	// Timeout bounds each request; zero or negative means no timeout.
+	// Timeout bounds the full completion stream; zero or negative means no timeout.
 	Timeout time.Duration
 }
 
-// NewClient builds an OpenAI client from the given configuration.
+// Client holds the OpenAI-compatible client and the endpoint details needed to
+// stop a llama.cpp resumable stream after cancellation or timeout.
+type Client struct {
+	api     openai.Client
+	baseURL string
+	apiKey  string
+	timeout time.Duration
+}
+
+// NewClient builds a cancellable OpenAI-compatible client from the configuration.
 //
 // Empty BaseURL falls back to DefaultBaseURL and empty APIKey falls back to a
 // placeholder key, so callers can pass a zero Config to hit the defaults.
-func NewClient(cfg Config) openai.Client {
+func NewClient(cfg Config) Client {
 	baseURL := cfg.BaseURL
 	if baseURL == "" {
 		baseURL = DefaultBaseURL
@@ -41,8 +55,28 @@ func NewClient(cfg Config) openai.Client {
 		option.WithBaseURL(baseURL),
 		option.WithAPIKey(apiKey),
 	}
-	if cfg.Timeout > 0 {
-		opts = append(opts, option.WithRequestTimeout(cfg.Timeout))
+	return Client{api: openai.NewClient(opts...), baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, timeout: cfg.Timeout}
+}
+
+func (c Client) stopStream(conversationID string) error {
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	endpoint := c.baseURL + "/stream?conv_id=" + url.QueryEscape(conversationID)
+	req, err := http.NewRequestWithContext(ctx, http.MethodDelete, endpoint, nil)
+	if err != nil {
+		return err
 	}
-	return openai.NewClient(opts...)
+	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode == http.StatusNotFound || resp.StatusCode == http.StatusMethodNotAllowed {
+		return nil // The OpenAI-compatible server does not expose llama.cpp's stop API.
+	}
+	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+		return fmt.Errorf("stop endpoint returned HTTP %d", resp.StatusCode)
+	}
+	return nil
 }

@@ -1,5 +1,5 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
-import { Play } from "lucide-react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChevronDown, Play, Square } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -35,6 +35,7 @@ export default function App() {
   const [linting, setLinting] = useState(false);
   const [run, setRun] = useState<RunState>(IDLE_STATE);
   const [elapsed, setElapsed] = useState(0);
+  const abortController = useRef<AbortController | null>(null);
 
   const debouncedSchema = useDebounced(draft.schema, 300);
 
@@ -99,6 +100,8 @@ export default function App() {
       return;
     }
     const startedAt = Date.now();
+    const controller = new AbortController();
+    abortController.current = controller;
     setRun({ ...IDLE_STATE, running: true, startedAt, requestPreview: requestPreview });
     setElapsed(0);
     try {
@@ -106,6 +109,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
       const latencyHeader = res.headers.get("X-Latency-Ms");
       const latencyMs = latencyHeader ? Number(latencyHeader) : null;
@@ -131,6 +135,10 @@ export default function App() {
         error: res.ok ? null : text,
       });
     } catch (err) {
+      if (controller.signal.aborted) {
+        setRun({ ...IDLE_STATE, startedAt, cancelled: true, requestPreview });
+        return;
+      }
       const message = err instanceof Error ? err.message : String(err);
       setRun({
         running: false,
@@ -151,6 +159,8 @@ export default function App() {
         responseText: "",
         error: message,
       });
+    } finally {
+      if (abortController.current === controller) abortController.current = null;
     }
   };
 
@@ -183,34 +193,45 @@ export default function App() {
         running={run.running}
         lintIssues={lintIssuesCount(lintResult, linting)}
         onRun={runRequest}
+        onStop={() => abortController.current?.abort()}
       />
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row lg:overflow-hidden">
         <section className="flex w-full shrink-0 flex-col gap-4 lg:w-[460px] lg:overflow-auto lg:pr-1">
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">Connection & sampling</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <ConnectionPanel
-                settings={draft.settings}
-                serverDefaults={serverDefaults}
-                onChange={(settings: Settings) => setDraft({ ...draft, settings })}
-              />
-            </CardContent>
+            <details className="group">
+              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <CardHeader className="flex-row items-center justify-between pb-4">
+                  <CardTitle className="text-sm">Connection & sampling</CardTitle>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </CardHeader>
+              </summary>
+              <CardContent>
+                <ConnectionPanel
+                  settings={draft.settings}
+                  serverDefaults={serverDefaults}
+                  onChange={(settings: Settings) => setDraft({ ...draft, settings })}
+                />
+              </CardContent>
+            </details>
           </Card>
 
           <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm">System message</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <Textarea
-                value={draft.system}
-                onChange={(e) => setDraft({ ...draft, system: e.target.value })}
-                placeholder="Optional system message…"
-                className="min-h-[60px]"
-              />
-            </CardContent>
+            <details className="group">
+              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <CardHeader className="flex-row items-center justify-between pb-4">
+                  <CardTitle className="text-sm">System message</CardTitle>
+                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                </CardHeader>
+              </summary>
+              <CardContent>
+                <Textarea
+                  value={draft.system}
+                  onChange={(e) => setDraft({ ...draft, system: e.target.value })}
+                  placeholder="Optional system message…"
+                  className="min-h-[60px]"
+                />
+              </CardContent>
+            </details>
           </Card>
 
           <Card>
@@ -279,11 +300,13 @@ function Header({
   running,
   lintIssues,
   onRun,
+  onStop,
 }: {
   canRun: boolean;
   running: boolean;
   lintIssues: number;
   onRun: () => void;
+  onStop: () => void;
 }) {
   return (
     <header className="flex items-center gap-3 border-b bg-background px-4 py-2">
@@ -295,9 +318,15 @@ function Header({
           {lintIssues} schema issue{lintIssues > 1 ? "s" : ""} — fix before running
         </span>
       )}
-      <Button onClick={onRun} disabled={!canRun || running}>
-        <Play /> {running ? "Running…" : "Run"}
-      </Button>
+      {running ? (
+        <Button variant="destructive" onClick={onStop}>
+          <Square fill="currentColor" /> Stop
+        </Button>
+      ) : (
+        <Button onClick={onRun} disabled={!canRun}>
+          <Play /> Run
+        </Button>
+      )}
     </header>
   );
 }

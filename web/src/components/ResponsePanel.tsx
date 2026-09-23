@@ -10,6 +10,7 @@ import { copyText } from "@/lib/store";
 
 export interface RunState {
   running: boolean;
+  cancelled?: boolean;
   startedAt: number | null;
   status: number | null;
   latencyMs: number | null;
@@ -25,13 +26,15 @@ export function ResponsePanel({
   state: RunState;
   elapsedMs: number;
 }) {
-  const { running, startedAt, status, latencyMs, responseText, error, requestPreview } = state;
+  const { running, cancelled, startedAt, status, latencyMs, responseText, error, requestPreview } = state;
   const showElapsed = running && startedAt !== null;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
         {running ? (
           <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">running… {(elapsedMs / 1000).toFixed(1)}s</Badge>
+        ) : cancelled ? (
+          <Badge variant="outline">Stopped</Badge>
         ) : status !== null ? (
           <>
             <Badge

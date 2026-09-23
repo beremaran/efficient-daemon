@@ -95,10 +95,10 @@ export function SchemaPanel({
       </div>
 
       <TabsContent value="edit" className="mt-2 min-h-0">
-        <div className="h-full min-h-[220px] overflow-hidden rounded-md border">
+        <div className="h-full min-h-[300px] overflow-hidden rounded-md border">
           <CodeMirror
             value={schema}
-            height="220px"
+            height="300px"
             extensions={[json()]}
             theme={oneDark}
             basicSetup={{ foldGutter: true }}

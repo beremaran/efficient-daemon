@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -12,6 +13,12 @@ import (
 	"testing"
 	"time"
 )
+
+func writeCompletionStream(w http.ResponseWriter, content string) {
+	w.Header().Set("Content-Type", "text/event-stream")
+	_, _ = fmt.Fprintf(w, "data: {\"id\":\"test\",\"object\":\"chat.completion.chunk\",\"created\":0,\"model\":\"test\",\"choices\":[{\"index\":0,\"delta\":{\"content\":%q},\"finish_reason\":\"stop\"}]}\n\n", content)
+	_, _ = fmt.Fprint(w, "data: [DONE]\n\n")
+}
 
 func TestValidateInputs(t *testing.T) {
 	tests := []struct {
@@ -39,8 +46,7 @@ func TestValidateInputs(t *testing.T) {
 
 func TestDecodeResponseKeepsIntegerPrecision(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"id":"test","object":"chat.completion","created":0,"model":"test","choices":[{"index":0,"message":{"role":"assistant","content":"{\"i\":123456789012345678}"},"finish_reason":"stop"}]}`)
+		writeCompletionStream(w, `{"i":123456789012345678}`)
 	}))
 	defer server.Close()
 
@@ -100,6 +106,11 @@ func TestRunRejectsOutOfRangeTemperature(t *testing.T) {
 
 func TestCommandHonorsTimeout(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodDelete {
+			w.WriteHeader(http.StatusNoContent)
+			return
+		}
+		_, _ = io.Copy(io.Discard, r.Body)
 		select {
 		case <-time.After(2 * time.Second):
 		case <-r.Context().Done():
@@ -151,8 +162,7 @@ func TestAskStillRequiresSchemaFlag(t *testing.T) {
 
 func TestCommandEndToEnd(t *testing.T) {
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		w.Header().Set("Content-Type", "application/json")
-		_, _ = fmt.Fprint(w, `{"id":"test","object":"chat.completion","created":0,"model":"test","choices":[{"index":0,"message":{"role":"assistant","content":"{\"answer\":\"yes\"}"},"finish_reason":"stop"}]}`)
+		writeCompletionStream(w, `{"answer":"yes"}`)
 	}))
 	defer server.Close()
 

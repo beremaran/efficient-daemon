@@ -2,10 +2,15 @@ package core
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"strings"
 
 	"github.com/openai/openai-go/v3"
+	"github.com/openai/openai-go/v3/option"
 	"github.com/openai/openai-go/v3/shared"
 )
 
@@ -21,7 +26,12 @@ type RequestOptions struct {
 // AskSchema performs a structured-output completion using an arbitrary JSON
 // schema (rather than a Go type) and returns the model's raw JSON content. The
 // caller is responsible for validating the result against the schema.
-func AskSchema(ctx context.Context, client openai.Client, botContext BotContext, schema map[string]any, opts RequestOptions) (json.RawMessage, error) {
+func AskSchema(ctx context.Context, client Client, botContext BotContext, schema map[string]any, opts RequestOptions) (json.RawMessage, error) {
+	if client.timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, client.timeout)
+		defer cancel()
+	}
 	resp, err := chatCompletionContext(ctx, client, botContext, schema, opts)
 	if err != nil {
 		return nil, err
@@ -29,7 +39,7 @@ func AskSchema(ctx context.Context, client openai.Client, botContext BotContext,
 	return json.RawMessage(resp), nil
 }
 
-func chatCompletionContext(ctx context.Context, client openai.Client, botContext BotContext, schema map[string]any, opts RequestOptions) (string, error) {
+func chatCompletionContext(ctx context.Context, client Client, botContext BotContext, schema map[string]any, opts RequestOptions) (content string, err error) {
 	effort, err := reasoningEffort(opts.ReasoningEffort)
 	if err != nil {
 		return "", err
@@ -62,15 +72,45 @@ func chatCompletionContext(ctx context.Context, client openai.Client, botContext
 		params.MaxTokens = openai.Int(*opts.MaxTokens)
 	}
 
-	resp, err := client.Chat.Completions.New(ctx, params)
-	if err != nil {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return "", fmt.Errorf("create stream id: %w", err)
+	}
+	conversationID := hex.EncodeToString(id[:])
+	stream := client.api.Chat.Completions.NewStreaming(ctx, params, option.WithHeader("X-Conversation-Id", conversationID))
+	completed := false
+	defer func() {
+		if !completed {
+			if stopErr := client.stopStream(conversationID); stopErr != nil {
+				err = errors.Join(err, fmt.Errorf("stop upstream generation: %w", stopErr))
+			}
+		}
+	}()
+
+	var response strings.Builder
+	hasChoice := false
+	finished := false
+	for stream.Next() {
+		choices := stream.Current().Choices
+		if len(choices) == 0 {
+			continue
+		}
+		hasChoice = true
+		response.WriteString(choices[0].Delta.Content)
+		finished = finished || choices[0].FinishReason != ""
+	}
+	if err = stream.Err(); err != nil {
 		return "", err
 	}
-	if len(resp.Choices) == 0 {
+	if !hasChoice {
 		return "", fmt.Errorf("model returned no choices")
 	}
+	if !finished {
+		return "", fmt.Errorf("model stream ended before completion")
+	}
 
-	return resp.Choices[0].Message.Content, nil
+	completed = true
+	return response.String(), nil
 }
 
 // reasoningEffort maps a CLI-level effort name to the SDK union value. An empty
