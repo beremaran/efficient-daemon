@@ -1,10 +1,17 @@
 BIN := bin/efficient-daemon
+WEB_DIR := web
 
-.PHONY: build test fmt vet clean help
+.PHONY: build test fmt vet clean help build-web dev-web
 
 build:            ## Build the CLI into ./bin/efficient-daemon
 	@mkdir -p bin
 	go build -o $(BIN) ./cmd/efficient-daemon
+
+build-web:        ## Build the workbench UI into internal/workbench/dist (committed; needs node/npm)
+	cd $(WEB_DIR) && npm ci && npm run build
+
+dev-web:          ## Run the workbench UI dev server (proxies /ask, /config, /schema/lint to :8080)
+	cd $(WEB_DIR) && npm run dev
 
 test:             ## Run all tests
 	go test ./...

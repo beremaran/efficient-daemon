@@ -17,6 +17,7 @@ import (
 	"efficient-daemon/internal/output"
 	responseschema "efficient-daemon/internal/schema"
 	"efficient-daemon/internal/server"
+	"efficient-daemon/internal/workbench"
 	"github.com/openai/openai-go/v3"
 	"github.com/spf13/cobra"
 )
@@ -237,6 +238,7 @@ func newServeCommand() *cobra.Command {
 	var cfg server.Config
 	var temperature float64
 	var maxTokens int64
+	var workbench bool
 	cmd := &cobra.Command{
 		Use:           "serve",
 		Short:         "Serve the ask flow over HTTP with generated OpenAPI docs",
@@ -251,6 +253,7 @@ func newServeCommand() *cobra.Command {
 			if flags.Changed("max-tokens") {
 				cfg.MaxTokens = &maxTokens
 			}
+			cfg.Workbench = workbench
 			return runServe(cmd, cfg)
 		},
 	}
@@ -266,6 +269,7 @@ func newServeCommand() *cobra.Command {
 	flags.Float64Var(&temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&maxTokens, "max-tokens", 0, "maximum tokens to generate")
 	flags.DurationVar(&cfg.Timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
+	flags.BoolVar(&workbench, "workbench", false, "serve the interactive workbench UI at / (assets are embedded)")
 	return cmd
 }
 
@@ -274,6 +278,9 @@ func runServe(cmd *cobra.Command, cfg server.Config) error {
 	handler, err := server.New(cfg)
 	if err != nil {
 		return err
+	}
+	if cfg.Workbench {
+		handler = workbench.Handler(handler)
 	}
 	listener, err := net.Listen("tcp", net.JoinHostPort(cfg.Host, strconv.Itoa(cfg.Port)))
 	if err != nil {
@@ -288,7 +295,7 @@ func runServe(cmd *cobra.Command, cfg server.Config) error {
 		defer cancel()
 		_ = srv.Shutdown(shutdownCtx)
 	}()
-	fmt.Fprintf(cmd.OutOrStdout(), "serving on http://%s (API docs at /docs)\n", listener.Addr())
+	fmt.Fprintf(cmd.OutOrStdout(), "serving on http://%s (API docs at /docs)%s\n", listener.Addr(), map[bool]string{true: ", workbench UI at /", false: ""}[cfg.Workbench])
 	if err := srv.Serve(listener); err != nil && !errors.Is(err, http.ErrServerClosed) {
 		return err
 	}
