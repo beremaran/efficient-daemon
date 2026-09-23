@@ -259,6 +259,9 @@ func newServeCommand() *cobra.Command {
 		SilenceErrors: true,
 		Args:          cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := applyServeEnv(cmd); err != nil {
+				return err
+			}
 			flags := cmd.Flags()
 			if flags.Changed("temperature") {
 				cfg.Temperature = &temperature
@@ -284,6 +287,22 @@ func newServeCommand() *cobra.Command {
 	flags.DurationVar(&cfg.Timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
 	flags.BoolVar(&workbench, "workbench", false, "serve the interactive workbench UI at / (assets are embedded)")
 	return cmd
+}
+
+func applyServeEnv(cmd *cobra.Command) error {
+	flags := cmd.Flags()
+	for _, name := range []string{"host", "port", "base-url", "model", "api-key", "reasoning-effort", "temperature", "max-tokens", "timeout", "workbench"} {
+		if flags.Changed(name) {
+			continue
+		}
+		env := "EFFICIENT_DAEMON_" + strings.ToUpper(strings.ReplaceAll(name, "-", "_"))
+		if value := os.Getenv(env); value != "" {
+			if err := flags.Set(name, value); err != nil {
+				return fmt.Errorf("invalid %s: %w", env, err)
+			}
+		}
+	}
+	return nil
 }
 
 func runServe(cmd *cobra.Command, cfg server.Config) error {
