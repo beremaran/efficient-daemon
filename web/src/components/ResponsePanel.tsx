@@ -11,7 +11,6 @@ import { copyText } from "@/lib/store";
 export interface RunState {
   running: boolean;
   cancelled?: boolean;
-  startedAt: number | null;
   status: number | null;
   latencyMs: number | null;
   responseText: string;
@@ -19,20 +18,13 @@ export interface RunState {
   requestPreview: string;
 }
 
-export function ResponsePanel({
-  state,
-  elapsedMs,
-}: {
-  state: RunState;
-  elapsedMs: number;
-}) {
-  const { running, cancelled, startedAt, status, latencyMs, responseText, error, requestPreview } = state;
-  const showElapsed = running && startedAt !== null;
+export function ResponsePanel({ state }: { state: RunState }) {
+  const { running, cancelled, status, latencyMs, responseText, error, requestPreview } = state;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
         {running ? (
-          <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">running… {(elapsedMs / 1000).toFixed(1)}s</Badge>
+          <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running…</Badge>
         ) : cancelled ? (
           <Badge variant="outline">Stopped</Badge>
         ) : status !== null ? (
@@ -51,9 +43,6 @@ export function ResponsePanel({
         ) : (
           <span className="text-muted-foreground">No run yet.</span>
         )}
-        {showElapsed && status === null && (
-          <span className="text-xs text-muted-foreground">{(elapsedMs / 1000).toFixed(1)}s elapsed</span>
-        )}
         <span className="flex-1" />
         {responseText && (
           <Button variant="ghost" size="sm" onClick={() => copyText(responseText)}>
@@ -71,30 +60,32 @@ export function ResponsePanel({
 
       <Separator />
 
-      <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col">
-        <TabsList>
+      <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col gap-3">
+        <TabsList className="self-end">
           <TabsTrigger value="response">Response</TabsTrigger>
           <TabsTrigger value="request">Request body</TabsTrigger>
         </TabsList>
-        <TabsContent value="response" className="min-h-0">
-          <div className="h-full min-h-[240px] overflow-hidden rounded-md border">
+        <TabsContent value="response" className="mt-0 flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
             <CodeMirror
               value={responseText || "// run a request to see the response"}
-              height="300px"
+              height="100%"
               extensions={[json()]}
               theme={oneDark}
               editable={false}
+              className="h-full min-h-0"
             />
           </div>
         </TabsContent>
-        <TabsContent value="request" className="min-h-0">
-          <div className="h-[300px] overflow-hidden rounded-md border">
+        <TabsContent value="request" className="mt-0 flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
             <CodeMirror
               value={requestPreview}
-              height="300px"
+              height="100%"
               extensions={[json()]}
               theme={oneDark}
               editable={false}
+              className="h-full min-h-0"
             />
           </div>
         </TabsContent>
