@@ -1,28 +1,51 @@
-# AGENTS.md
+# Repository Guidelines
 
-Single-module Go CLI (`module efficient-daemon`, Go 1.27). Sends one chat-completion request to an OpenAI-compatible API with strict JSON-Schema structured output, then validates the response client-side.
+## Project Structure & Module Organization
 
-## Commands
+This repository is a single-module Go CLI (`efficient-daemon`, Go 1.27). The
+CLI entrypoint and Cobra commands live in `cmd/efficient-daemon`. Domain code
+is organized under `internal/`: `core` handles requests, `message` handles
+context files, `schema` validates JSON Schema, `server` exposes the HTTP API,
+`pdf` handles PDF input, and `output` formats results. Go tests live beside
+their packages as `*_test.go` files. The React/Vite workbench source is in
+`web/src`; its built files are committed in `internal/workbench/dist` and
+embedded by Go. `context.schema.json` is the checked-in context-file schema;
+`bin/` contains ignored local binaries.
 
-- Build: `make build` (or `go build -o bin/efficient-daemon ./cmd/efficient-daemon`)
-- Test: `go test ./...` (single test: `go test -run TestName ./...`)
-- Workbench UI (React/Tailwind/shadcn in `web/`): `make build-web` rebuilds it into `internal/workbench/dist` (needs node/npm); `make dev-web` runs the Vite dev server proxying API calls to a local `serve`. The built assets are committed — Go builds and tests need no node.
-- No CI or lint config in this repo; format with `gofmt` (`make fmt`). Targets live in the `Makefile`: `build`, `build-web`, `dev-web`, `test`, `fmt`, `vet`, `clean`, `help`.
+## Build, Test, and Development Commands
 
-## Runtime facts worth knowing
+- `make build` builds `bin/efficient-daemon`.
+- `make test` runs all Go tests; use `go test -run TestName ./...` for a focused test.
+- `make vet` runs `go vet ./...`; `make fmt` applies `gofmt` to Go sources.
+- `make build-web` runs `npm ci` and builds `web/` into the embedded `dist/` directory. Run it after changing the workbench.
+- `make dev-web` starts Vite. Run `efficient-daemon serve --workbench` on `:8080` so the dev proxy can reach the API.
+- `cd web && npm run lint` runs Oxlint. `make help` lists the available Make targets.
 
-- Three subcommands: `ask [prompt]` runs the request flow (every request flag below belongs to it); `schema` prints the JSON Schema for context files; `serve` runs the same flow as an HTTP JSON API (default `127.0.0.1:8080`, override with `--host`/`--port`; graceful shutdown on SIGINT/SIGTERM). The same schema is checked in at `context.schema.json` (repo root) — a test keeps it byte-identical to `message.ContextFileSchema`.
-- `serve` endpoints: `POST /ask` (synchronous; sets `X-Latency-Ms` on every response), `GET /openapi.json` (spec), `GET /docs` (Scalar API reference from a pinned CDN), `GET /config` (startup defaults minus api-key), `POST /schema/lint` (parse/compile errors + strict-subset warnings). The OpenAPI document is generated at startup in `internal/server` by reflecting `AskRequest` — there is no spec file to edit. The ask flags are request defaults; any `POST /ask` body field overrides them, and body field names match the CLI flags. Media travels inline as base64 (images also accept http(s) URLs) and request bodies are capped at 30 MiB.
-- `serve --workbench` also serves the embedded workbench UI at `/` (`internal/workbench`, assets under `/assets/`). The UI is a static React build; drafts and run history persist in the browser's localStorage only.
-- Defaults: model `Qwen3.5-2B` at `https://llm-desktop.kwilabs.net/v1`, API key `not-needed`, request timeout `5m`. No env vars or keys required; override with `--model`, `--base-url`, `--api-key`, `--timeout` (per request attempt — the SDK's retries each get the full budget; 0 disables the timeout).
-- `--schema <file.json>` is required; the model response must be valid JSON and match the schema (validated with `santhosh-tekuri/jsonschema` in `internal/schema`).
-- `--context <file>` (YAML/JSON) is mutually exclusive with prompt, `--system`, `--system-file`, `--user-file`, and `--image`.
-- Tests are hermetic: the end-to-end tests (`cmd/efficient-daemon/root_test.go`, `internal/server/server_test.go`) use `httptest` servers, so no network, model, or key is needed.
+## Coding Style & Naming Conventions
 
-## Gotchas
+Use `gofmt` and standard Go naming: lowercase package names, `PascalCase` exported
+identifiers, and `camelCase` locals. Keep CLI wiring in `cmd/` and reusable
+behavior in `internal/`. TypeScript/TSX follows the existing two-space,
+double-quoted, semicolon-terminated style and uses the `@/` alias for `web/src`.
 
-- `internal/pdf` shells out to `pdftoppm` (Poppler) or `mutool` (MuPDF); PDF support fails without one of these system binaries installed — for CLI media paths and for base64 PDF parts sent to `serve` alike.
-- `internal/schema.Parse` intentionally keeps schema values as raw JSON so integer constraints survive serialization — don't round-trip schemas through `map[string]any` unmarshaling.
-- The API requires the response schema `Name` to match `[a-zA-Z0-9_-]{1,64}`; `internal/core/ask.go` hardcodes `"response"` — keep a non-empty name if touching that code.
-- `bin/` (via `make build`) holds the gitignored binary; there is no build artifact at the repo root.
-- `internal/workbench/dist` is committed and `go:embed`'d — `go build`/`go test` never need node. After changing `web/`, rerun `make build-web` or the binary serves stale UI.
+## Testing Guidelines
+
+Use Go's standard `testing` package with `TestXxx` names and colocated
+`*_test.go` files. Keep tests hermetic; existing end-to-end coverage uses
+`httptest` rather than live APIs. No coverage threshold or frontend test
+framework is configured, so add focused tests for behavior that warrants them.
+
+## Commits and Pull Requests
+
+Use short, imperative commit subjects matching history, such as `Add ...`,
+`Fix ...`, or `Remove ...`. Pull requests should explain the behavior change,
+link an issue when one exists, list checks run (`make test`, `make vet`, and
+frontend lint/build as applicable), and include a screenshot for workbench UI
+changes. Mention regenerated `internal/workbench/dist` files when relevant.
+
+## Security & Configuration
+
+Never commit API keys or `.env` files. Configure model access with CLI flags
+such as `--api-key`, `--base-url`, and `--timeout`. PDF features require a
+system `pdftoppm` or `mutool` binary; document that dependency when changing
+PDF behavior.
