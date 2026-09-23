@@ -10,7 +10,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"efficient-daemon/internal/pdf"
+	"github.com/beremaran/efficient-daemon/internal/pdf"
 	"github.com/openai/openai-go/v3"
 	"gopkg.in/yaml.v3"
 )

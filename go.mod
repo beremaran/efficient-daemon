@@ -1,4 +1,4 @@
-module efficient-daemon
+module github.com/beremaran/efficient-daemon
 
 go 1.27
 

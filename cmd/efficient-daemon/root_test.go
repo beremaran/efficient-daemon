@@ -27,12 +27,12 @@ func TestValidateInputs(t *testing.T) {
 		args    []string
 		wantErr bool
 	}{
-		{name: "prompt", opts: options{output: "json-pretty"}, args: []string{"hello"}},
-		{name: "context", opts: options{output: "json", context: "context.yaml"}},
-		{name: "missing input", opts: options{output: "json-pretty"}, wantErr: true},
-		{name: "mixed modes", opts: options{output: "json-pretty", context: "context.yaml", system: "x"}, wantErr: true},
-		{name: "invalid output", opts: options{output: "yaml"}, args: []string{"hello"}, wantErr: true},
-		{name: "negative timeout", opts: options{output: "json-pretty", timeout: -time.Second}, args: []string{"hello"}, wantErr: true},
+		{name: "prompt", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty"}, args: []string{"hello"}},
+		{name: "context", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json", context: "context.yaml"}},
+		{name: "missing input", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty"}, wantErr: true},
+		{name: "mixed modes", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty", context: "context.yaml", system: "x"}, wantErr: true},
+		{name: "invalid output", opts: options{baseURL: "https://example.com/v1", model: "test", output: "yaml"}, args: []string{"hello"}, wantErr: true},
+		{name: "negative timeout", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty", timeout: -time.Second}, args: []string{"hello"}, wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -96,7 +96,7 @@ func TestRunRejectsOutOfRangeTemperature(t *testing.T) {
 	}
 	for _, value := range []string{"-0.5", "2.5"} {
 		cmd := newRootCommand()
-		cmd.SetArgs([]string{"ask", "--base-url", "http://127.0.0.1:1", "--schema", schemaPath, "--temperature", value, "hello"})
+		cmd.SetArgs([]string{"ask", "--base-url", "http://127.0.0.1:1", "--model", "test", "--schema", schemaPath, "--temperature", value, "hello"})
 		err := cmd.Execute()
 		if err == nil || !strings.Contains(err.Error(), "--temperature must be between 0 and 2") {
 			t.Fatalf("temperature %s: got %v, want range error", value, err)

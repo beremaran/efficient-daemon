@@ -9,7 +9,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	responseschema "efficient-daemon/internal/schema"
+	responseschema "github.com/beremaran/efficient-daemon/internal/schema"
 )
 
 // configResponse carries the startup defaults the workbench renders as

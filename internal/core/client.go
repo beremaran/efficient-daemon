@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"strings"
 	"time"
 
@@ -13,10 +14,6 @@ import (
 )
 
 const (
-	// DefaultModel is used when the caller does not supply a model.
-	DefaultModel = "Qwen3.5-2B"
-	// DefaultBaseURL is the default chat-completions endpoint.
-	DefaultBaseURL = "https://llm-desktop.kwilabs.net/v1"
 	// DefaultTimeout bounds a single completion request. Zero disables it.
 	DefaultTimeout = 5 * time.Minute
 )
@@ -38,24 +35,30 @@ type Client struct {
 	timeout time.Duration
 }
 
+// ValidateBaseURL requires an explicit absolute HTTP(S) API base URL.
+func ValidateBaseURL(raw string) error {
+	parsed, err := url.Parse(strings.TrimSpace(raw))
+	if err != nil || parsed.Scheme != "http" && parsed.Scheme != "https" || parsed.Hostname() == "" || parsed.User != nil || parsed.Fragment != "" {
+		return fmt.Errorf("base URL must be an absolute HTTP or HTTPS URL with a host")
+	}
+	return nil
+}
+
 // NewClient builds a cancellable OpenAI-compatible client from the configuration.
-//
-// Empty BaseURL falls back to DefaultBaseURL and empty APIKey falls back to a
-// placeholder key, so callers can pass a zero Config to hit the defaults.
-func NewClient(cfg Config) Client {
-	baseURL := cfg.BaseURL
-	if baseURL == "" {
-		baseURL = DefaultBaseURL
+func NewClient(cfg Config) (Client, error) {
+	baseURL := strings.TrimSpace(cfg.BaseURL)
+	if err := ValidateBaseURL(baseURL); err != nil {
+		return Client{}, err
 	}
 	apiKey := cfg.APIKey
 	if apiKey == "" {
-		apiKey = "not-needed"
+		apiKey = os.Getenv("OPENAI_API_KEY")
 	}
-	opts := []option.RequestOption{
-		option.WithBaseURL(baseURL),
-		option.WithAPIKey(apiKey),
+	opts := []option.RequestOption{option.WithBaseURL(baseURL)}
+	if apiKey != "" {
+		opts = append(opts, option.WithAPIKey(apiKey))
 	}
-	return Client{api: openai.NewClient(opts...), baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, timeout: cfg.Timeout}
+	return Client{api: openai.NewClient(opts...), baseURL: strings.TrimRight(baseURL, "/"), apiKey: apiKey, timeout: cfg.Timeout}, nil
 }
 
 func (c Client) stopStream(conversationID string) error {
@@ -66,7 +69,9 @@ func (c Client) stopStream(conversationID string) error {
 	if err != nil {
 		return err
 	}
-	req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	if c.apiKey != "" {
+		req.Header.Set("Authorization", "Bearer "+c.apiKey)
+	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
 		return err

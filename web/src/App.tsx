@@ -36,6 +36,14 @@ export default function App() {
   const abortController = useRef<AbortController | null>(null);
 
   const debouncedSchema = useDebounced(draft.schema, 300);
+  const effectiveSettings = useMemo(
+    () => ({
+      ...draft.settings,
+      model: draft.settings.model.trim() || String(serverDefaults.model ?? "").trim(),
+      baseURL: draft.settings.baseURL.trim() || String(serverDefaults.baseURL ?? "").trim(),
+    }),
+    [draft.settings, serverDefaults],
+  );
 
   // Server defaults for ghost text; no api-key by design.
   useEffect(() => {
@@ -66,15 +74,19 @@ export default function App() {
 
   const requestPreview = useMemo(() => {
     try {
-      return JSON.stringify(buildBody(draft.parts, draft.system, draft.schema, draft.settings), null, 2);
+      return JSON.stringify(buildBody(draft.parts, draft.system, draft.schema, effectiveSettings), null, 2);
     } catch {
       return "{}";
     }
-  }, [draft]);
+  }, [draft, effectiveSettings]);
 
   const lintErrors = lintResult && !linting ? lintResult.errors : [];
+  const model = effectiveSettings.model.trim();
+  const baseURL = effectiveSettings.baseURL.trim();
   const canRun =
     !run.running &&
+    !!model &&
+    !!baseURL &&
     draft.parts.length > 0 &&
     lintErrors.length === 0 &&
     !!draft.schema.trim() &&
@@ -85,7 +97,7 @@ export default function App() {
   const runRequest = async () => {
     let body: unknown;
     try {
-      body = buildBody(draft.parts, draft.system, draft.schema, draft.settings);
+      body = buildBody(draft.parts, draft.system, draft.schema, effectiveSettings);
     } catch (err) {
       setRun({ ...IDLE_STATE, error: `schema is not valid JSON: ${err instanceof Error ? err.message : err}` });
       return;
@@ -117,7 +129,7 @@ export default function App() {
         at: startedAt,
         status: res.status,
         latencyMs,
-        model: draft.settings.model || String(serverDefaults.model ?? "") || "server default",
+        model: model || "server default",
         request: body,
         response: safeParse(text),
         responseText: text,
@@ -141,7 +153,7 @@ export default function App() {
         at: startedAt,
         status: null,
         latencyMs: null,
-        model: draft.settings.model || "server default",
+        model: model || "server default",
         request: body,
         response: null,
         responseText: "",
@@ -268,7 +280,7 @@ export default function App() {
                     parts={draft.parts}
                     system={draft.system}
                     schema={draft.schema}
-                    settings={draft.settings}
+                    settings={effectiveSettings}
                   />
                 </TabsContent>
                 <TabsContent value="history">

@@ -65,19 +65,22 @@ export function ConnectionPanel({
         label="Model"
         value={settings.model}
         onChange={(model) => patch({ model })}
-        placeholder={serverDefaults.model || "server default"}
+        placeholder={serverDefaults.model || "required"}
       />
       <TextField
         label="Base URL"
         value={settings.baseURL}
         onChange={(baseURL) => patch({ baseURL })}
-        placeholder="server default"
+        placeholder={serverDefaults.baseURL || "required"}
       />
+      <p className="text-xs text-muted-foreground">
+        Model and base URL are required here or as server defaults.
+      </p>
       <TextField
         label="API key"
         value={settings.apiKey}
         onChange={(apiKey) => patch({ apiKey })}
-        placeholder="server default"
+        placeholder="optional; may be supplied by the server"
       />
       <TextField
         label="Timeout"

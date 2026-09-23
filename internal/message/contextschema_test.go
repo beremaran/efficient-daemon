@@ -7,7 +7,7 @@ import (
 	"strings"
 	"testing"
 
-	appschema "efficient-daemon/internal/schema"
+	appschema "github.com/beremaran/efficient-daemon/internal/schema"
 )
 
 func TestContextFileSchemaIsValidJSON(t *testing.T) {
