@@ -6,12 +6,14 @@ Single-module Go CLI (`module efficient-daemon`, Go 1.27). Sends one chat-comple
 
 - Build: `make build` (or `go build -o bin/efficient-daemon ./cmd/efficient-daemon`)
 - Test: `go test ./...` (single test: `go test -run TestName ./...`)
-- No CI or lint config in this repo; format with `gofmt` (`make fmt`). Targets live in the `Makefile`: `build`, `test`, `fmt`, `vet`, `clean`, `help`.
+- Workbench UI (React/Tailwind/shadcn in `web/`): `make build-web` rebuilds it into `internal/workbench/dist` (needs node/npm); `make dev-web` runs the Vite dev server proxying API calls to a local `serve`. The built assets are committed — Go builds and tests need no node.
+- No CI or lint config in this repo; format with `gofmt` (`make fmt`). Targets live in the `Makefile`: `build`, `build-web`, `dev-web`, `test`, `fmt`, `vet`, `clean`, `help`.
 
 ## Runtime facts worth knowing
 
 - Three subcommands: `ask [prompt]` runs the request flow (every request flag below belongs to it); `schema` prints the JSON Schema for context files; `serve` runs the same flow as an HTTP JSON API (default `127.0.0.1:8080`, override with `--host`/`--port`; graceful shutdown on SIGINT/SIGTERM). The same schema is checked in at `context.schema.json` (repo root) — a test keeps it byte-identical to `message.ContextFileSchema`.
-- `serve` endpoints: `POST /ask` (synchronous), `GET /openapi.json` (spec), `GET /docs` (Scalar API reference from a pinned CDN). The OpenAPI document is generated at startup in `internal/server` by reflecting `AskRequest` — there is no spec file to edit. The ask flags are request defaults; any `POST /ask` body field overrides them, and body field names match the CLI flags. Media travels inline as base64 (images also accept http(s) URLs) and request bodies are capped at 30 MiB.
+- `serve` endpoints: `POST /ask` (synchronous; sets `X-Latency-Ms` on every response), `GET /openapi.json` (spec), `GET /docs` (Scalar API reference from a pinned CDN), `GET /config` (startup defaults minus api-key), `POST /schema/lint` (parse/compile errors + strict-subset warnings). The OpenAPI document is generated at startup in `internal/server` by reflecting `AskRequest` — there is no spec file to edit. The ask flags are request defaults; any `POST /ask` body field overrides them, and body field names match the CLI flags. Media travels inline as base64 (images also accept http(s) URLs) and request bodies are capped at 30 MiB.
+- `serve --workbench` also serves the embedded workbench UI at `/` (`internal/workbench`, assets under `/assets/`). The UI is a static React build; drafts and run history persist in the browser's localStorage only.
 - Defaults: model `Qwen3.5-2B` at `https://llm-desktop.kwilabs.net/v1`, API key `not-needed`, request timeout `5m`. No env vars or keys required; override with `--model`, `--base-url`, `--api-key`, `--timeout` (per request attempt — the SDK's retries each get the full budget; 0 disables the timeout).
 - `--schema <file.json>` is required; the model response must be valid JSON and match the schema (validated with `santhosh-tekuri/jsonschema` in `internal/schema`).
 - `--context <file>` (YAML/JSON) is mutually exclusive with prompt, `--system`, `--system-file`, `--user-file`, and `--image`.
@@ -23,3 +25,4 @@ Single-module Go CLI (`module efficient-daemon`, Go 1.27). Sends one chat-comple
 - `internal/schema.Parse` intentionally keeps schema values as raw JSON so integer constraints survive serialization — don't round-trip schemas through `map[string]any` unmarshaling.
 - The API requires the response schema `Name` to match `[a-zA-Z0-9_-]{1,64}`; `internal/core/ask.go` hardcodes `"response"` — keep a non-empty name if touching that code.
 - `bin/` (via `make build`) holds the gitignored binary; there is no build artifact at the repo root.
+- `internal/workbench/dist` is committed and `go:embed`'d — `go build`/`go test` never need node. After changing `web/`, rerun `make build-web` or the binary serves stale UI.

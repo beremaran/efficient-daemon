@@ -1,0 +1,87 @@
+// Domain types mirroring the server's POST /ask body, plus shared UI types.
+
+export interface Part {
+  kind: "text" | "image" | "pdf";
+  text?: string;
+  /** base64 (no data: prefix) when source=upload, else an http(s) URL. */
+  image?: string;
+  pdf?: string;
+  /** Where media came from; drives the upload/URL toggle. */
+  source?: "upload" | "url";
+  /** Original filename for upload parts, display only. */
+  fileName?: string;
+}
+
+export interface Settings {
+  model: string;
+  baseURL: string;
+  apiKey: string;
+  reasoningEffort: string;
+  temperatureEnabled: boolean;
+  temperature: string;
+  maxTokensEnabled: boolean;
+  maxTokens: string;
+  timeout: string;
+}
+
+export interface Draft {
+  settings: Settings;
+  system: string;
+  parts: Part[];
+  schema: string;
+}
+
+export interface RunRecord {
+  at: number;
+  status: number | null;
+  latencyMs: number | null;
+  model: string;
+  request: unknown;
+  response: unknown;
+  responseText: string;
+  error: string | null;
+}
+
+export const REASONING_EFFORTS = [
+  "none",
+  "minimal",
+  "low",
+  "medium",
+  "high",
+  "xhigh",
+  "max",
+] as const;
+
+// Keep in sync with internal/server (maxBodyBytes) and internal/message.
+export const MAX_BODY_BYTES = 30 << 20; // 30 MiB request body cap
+export const MAX_IMAGE_BYTES = 20 << 20; // 20 MiB per image file
+// Base64 encodes 3 bytes into 4 chars.
+export const BASE64_INFLATION = 4 / 3;
+
+export const DEFAULT_SETTINGS: Settings = {
+  model: "",
+  baseURL: "",
+  apiKey: "",
+  reasoningEffort: "",
+  temperatureEnabled: false,
+  temperature: "0.7",
+  maxTokensEnabled: false,
+  maxTokens: "",
+  timeout: "",
+};
+
+export const DEFAULT_SCHEMA = `{
+  "type": "object",
+  "properties": {
+    "answer": { "type": "string" }
+  },
+  "required": ["answer"],
+  "additionalProperties": false
+}`;
+
+export const EMPTY_DRAFT: Draft = {
+  settings: { ...DEFAULT_SETTINGS },
+  system: "",
+  parts: [{ kind: "text", text: "" }],
+  schema: DEFAULT_SCHEMA,
+};

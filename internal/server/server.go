@@ -16,6 +16,7 @@ import (
 	"net/url"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -36,6 +37,8 @@ type Config struct {
 	Port int
 	// Version is reported in the OpenAPI document.
 	Version string
+	// Workbench mounts the embedded UI at / (see internal/workbench).
+	Workbench bool
 	// Request defaults; every POST /ask field overrides these.
 	BaseURL         string
 	APIKey          string
@@ -78,6 +81,8 @@ func New(cfg Config) (http.Handler, error) {
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(spec)
 	})
+	mux.HandleFunc("GET /config", h.handleConfig)
+	mux.HandleFunc("POST /schema/lint", h.handleLint)
 	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")
 		_, _ = io.WriteString(w, docsHTML)
@@ -189,11 +194,15 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 
 	client := core.NewClient(core.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Timeout: cfg.timeout})
 	botContext := core.NewMessagesContext(cfg.model, messages)
+	started := time.Now()
 	raw, err := core.AskSchema(r.Context(), client, botContext, schemaMap, core.RequestOptions{
 		ReasoningEffort: cfg.effort,
 		Temperature:     cfg.temperature,
 		MaxTokens:       cfg.maxTokens,
 	})
+	// Set before any WriteHeader path (success, 422, writeError) so every
+	// response carries the model-call latency the workbench displays.
+	w.Header().Set("X-Latency-Ms", strconv.FormatInt(time.Since(started).Milliseconds(), 10))
 	if err != nil {
 		writeError(w, upstreamStatus(err), fmt.Errorf("ask model: %w", err))
 		return
