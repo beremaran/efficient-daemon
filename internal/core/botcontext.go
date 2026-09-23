@@ -16,12 +16,8 @@ type MessagesContext struct {
 	messages []openai.ChatCompletionMessageParamUnion
 }
 
-// NewMessagesContext returns a BotContext from a model id and messages. An empty
-// model falls back to DefaultModel.
+// NewMessagesContext returns a BotContext from an explicit model id and messages.
 func NewMessagesContext(model string, messages []openai.ChatCompletionMessageParamUnion) BotContext {
-	if model == "" {
-		model = DefaultModel
-	}
 	return &MessagesContext{model: model, messages: messages}
 }
 

@@ -1,6 +1,6 @@
 // Package workbench serves the embedded workbench UI. Wrap mounts it in front
-// of an existing handler: / returns index.html, /assets/* serves the hashed
-// build output, everything else passes through untouched.
+// of an existing handler: / returns index.html, /assets/* serves hashed assets,
+// and /THIRD_PARTY_NOTICES.md serves the bundled workbench license inventory.
 package workbench
 
 import (
@@ -23,6 +23,7 @@ func Handler(next http.Handler) http.Handler {
 	}
 	mux := http.NewServeMux()
 	mux.Handle("GET /assets/", cacheImmutable(http.FileServerFS(root)))
+	mux.Handle("GET /THIRD_PARTY_NOTICES.md", http.FileServerFS(root))
 	mux.HandleFunc("GET /{$}", func(w http.ResponseWriter, r *http.Request) {
 		index, err := files.ReadFile("dist/index.html")
 		if err != nil {

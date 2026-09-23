@@ -20,10 +20,10 @@ import (
 	"strings"
 	"time"
 
-	"efficient-daemon/internal/core"
-	"efficient-daemon/internal/message"
-	"efficient-daemon/internal/output"
-	responseschema "efficient-daemon/internal/schema"
+	"github.com/beremaran/efficient-daemon/internal/core"
+	"github.com/beremaran/efficient-daemon/internal/message"
+	"github.com/beremaran/efficient-daemon/internal/output"
+	responseschema "github.com/beremaran/efficient-daemon/internal/schema"
 )
 
 // maxBodyBytes caps the whole request body before decoding, so an
@@ -56,8 +56,8 @@ type AskRequest struct {
 	Schema          json.RawMessage `json:"schema" jsonschema:"description=JSON Schema the model response must satisfy (strict structured-output subset)."`
 	System          string          `json:"system,omitempty" jsonschema:"description=Optional system message."`
 	Parts           []message.Part  `json:"parts" jsonschema:"description=The user message; at least one part, each with exactly one of text, image, or pdf."`
-	Model           string          `json:"model,omitempty"`
-	BaseURL         string          `json:"base-url,omitempty"`
+	Model           string          `json:"model,omitempty" jsonschema:"description=Model identifier; required if no server model is configured."`
+	BaseURL         string          `json:"base-url,omitempty" jsonschema:"description=Absolute HTTP(S) API base URL; required if no server base URL is configured."`
 	APIKey          string          `json:"api-key,omitempty"`
 	ReasoningEffort string          `json:"reasoning-effort,omitempty" jsonschema:"description=none, minimal, low, medium, high, xhigh, or max."`
 	Temperature     *float64        `json:"temperature,omitempty"`
@@ -67,6 +67,11 @@ type AskRequest struct {
 
 // New builds the HTTP handler and generates the OpenAPI document.
 func New(cfg Config) (http.Handler, error) {
+	if strings.TrimSpace(cfg.BaseURL) != "" {
+		if err := core.ValidateBaseURL(cfg.BaseURL); err != nil {
+			return nil, fmt.Errorf("invalid server base URL: %w", err)
+		}
+	}
 	h := &handler{defaults: cfg}
 	if _, err := h.resolve(AskRequest{}); err != nil {
 		return nil, fmt.Errorf("invalid server configuration: %w", err)
@@ -105,10 +110,10 @@ type settings struct {
 // result with the same rules the CLI applies to its flags.
 func (h *handler) resolve(req AskRequest) (settings, error) {
 	s := settings{
-		model:       firstNonEmpty(req.Model, h.defaults.Model),
-		baseURL:     firstNonEmpty(req.BaseURL, h.defaults.BaseURL),
-		apiKey:      firstNonEmpty(req.APIKey, h.defaults.APIKey),
-		effort:      firstNonEmpty(req.ReasoningEffort, h.defaults.ReasoningEffort),
+		model:       firstNonEmpty(strings.TrimSpace(req.Model), strings.TrimSpace(h.defaults.Model)),
+		baseURL:     firstNonEmpty(strings.TrimSpace(req.BaseURL), strings.TrimSpace(h.defaults.BaseURL)),
+		apiKey:      strings.TrimSpace(firstNonEmpty(req.APIKey, h.defaults.APIKey)),
+		effort:      strings.TrimSpace(firstNonEmpty(req.ReasoningEffort, h.defaults.ReasoningEffort)),
 		temperature: orDefault(req.Temperature, h.defaults.Temperature),
 		maxTokens:   orDefault(req.MaxTokens, h.defaults.MaxTokens),
 		timeout:     h.defaults.Timeout,
@@ -153,6 +158,18 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
+	if strings.TrimSpace(cfg.baseURL) == "" {
+		writeError(w, http.StatusBadRequest, errors.New("base-url is required; set --base-url on the server or include it in the request"))
+		return
+	}
+	if err := core.ValidateBaseURL(cfg.baseURL); err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
+	if strings.TrimSpace(cfg.model) == "" {
+		writeError(w, http.StatusBadRequest, errors.New("model is required; set --model on the server or include it in the request"))
+		return
+	}
 	if len(req.Schema) == 0 {
 		writeError(w, http.StatusBadRequest, errors.New("schema is required"))
 		return
@@ -192,7 +209,11 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client := core.NewClient(core.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Timeout: cfg.timeout})
+	client, err := core.NewClient(core.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Timeout: cfg.timeout})
+	if err != nil {
+		writeError(w, http.StatusBadRequest, err)
+		return
+	}
 	botContext := core.NewMessagesContext(cfg.model, messages)
 	started := time.Now()
 	raw, err := core.AskSchema(r.Context(), client, botContext, schemaMap, core.RequestOptions{

@@ -1,0 +1,35 @@
+name: Bug report
+description: Report a reproducible problem.
+title: "Bug: "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: Do not include API keys, private prompts, or customer data.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What happened?
+      description: Include the command or request shape, with secrets removed.
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What did you expect?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      placeholder: efficient-daemon --version
+    validations:
+      required: true
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: OS, architecture, Go install or release binary, and upstream type/version.
+    validations:
+      required: true

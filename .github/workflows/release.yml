@@ -1,0 +1,72 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - run: go mod verify
+      - run: go run golang.org/x/vuln/cmd/govulncheck@v1.8.0 ./...
+      - run: make test
+      - run: make vet
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm audit --audit-level=high
+        working-directory: web
+      - run: make licenses
+      - run: npm run lint
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+      - run: git diff --exit-code -- internal/workbench/dist THIRD_PARTY_NOTICES.md THIRD_PARTY_LICENSES
+      - name: Build release archives
+        shell: bash
+        run: |
+          set -euo pipefail
+          tag="$GITHUB_REF_NAME"
+          [[ "$tag" =~ ^v[0-9]+\.[0-9]+\.[0-9]+([.-][0-9A-Za-z.-]+)?$ ]]
+          version="${tag#v}"
+          mkdir -p dist
+          for target in linux/amd64 linux/arm64 darwin/amd64 darwin/arm64 windows/amd64 windows/arm64; do
+            goos="${target%/*}"
+            goarch="${target#*/}"
+            name="efficient-daemon_${version}_${goos}_${goarch}"
+            ext=""
+            [[ "$goos" == windows ]] && ext=".exe"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath \
+              -ldflags "-s -w -X main.version=$tag" \
+              -o "dist/${name}${ext}" ./cmd/efficient-daemon
+            package_dir="$(mktemp -d)"
+            cp "dist/${name}${ext}" README.md LICENSE THIRD_PARTY_NOTICES.md "$package_dir/"
+            cp -R THIRD_PARTY_LICENSES "$package_dir/"
+            if [[ "$goos" == windows ]]; then
+              (cd "$package_dir" && zip -q -j "$GITHUB_WORKSPACE/dist/${name}.zip" *)
+            else
+              tar -C "$package_dir" -czf "$GITHUB_WORKSPACE/dist/${name}.tar.gz" .
+            fi
+            rm -rf "$package_dir" "dist/${name}${ext}"
+          done
+          sha256sum dist/*.tar.gz dist/*.zip > dist/checksums.txt
+      - name: Publish GitHub release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release create "$GITHUB_REF_NAME" dist/*.tar.gz dist/*.zip dist/checksums.txt --title "$GITHUB_REF_NAME" --generate-notes --latest

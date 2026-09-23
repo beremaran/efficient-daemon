@@ -9,15 +9,16 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"syscall"
 	"time"
 
-	"efficient-daemon/internal/core"
-	"efficient-daemon/internal/message"
-	"efficient-daemon/internal/output"
-	responseschema "efficient-daemon/internal/schema"
-	"efficient-daemon/internal/server"
-	"efficient-daemon/internal/workbench"
+	"github.com/beremaran/efficient-daemon/internal/core"
+	"github.com/beremaran/efficient-daemon/internal/message"
+	"github.com/beremaran/efficient-daemon/internal/output"
+	responseschema "github.com/beremaran/efficient-daemon/internal/schema"
+	"github.com/beremaran/efficient-daemon/internal/server"
+	"github.com/beremaran/efficient-daemon/internal/workbench"
 	"github.com/openai/openai-go/v3"
 	"github.com/spf13/cobra"
 )
@@ -77,9 +78,9 @@ func newAskCommand() *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.baseURL, "base-url", core.DefaultBaseURL, "OpenAI-compatible API base URL")
-	flags.StringVar(&opts.model, "model", core.DefaultModel, "model identifier")
-	flags.StringVar(&opts.apiKey, "api-key", "not-needed", "API key")
+	flags.StringVar(&opts.baseURL, "base-url", "", "OpenAI-compatible API base URL (required)")
+	flags.StringVar(&opts.model, "model", "", "model identifier (required)")
+	flags.StringVar(&opts.apiKey, "api-key", "", "API key (optional; OPENAI_API_KEY is used when set)")
 	flags.StringVar(&opts.schema, "schema", "", "JSON Schema file for the response (required)")
 	flags.StringVar(&opts.context, "context", "", "YAML or JSON context file")
 	flags.StringVar(&opts.system, "system", "", "system message")
@@ -113,6 +114,15 @@ func newSchemaCommand() *cobra.Command {
 }
 
 func validateInputs(opts options, args []string) error {
+	if strings.TrimSpace(opts.baseURL) == "" {
+		return fmt.Errorf("--base-url is required")
+	}
+	if err := core.ValidateBaseURL(opts.baseURL); err != nil {
+		return fmt.Errorf("--base-url: %w", err)
+	}
+	if strings.TrimSpace(opts.model) == "" {
+		return fmt.Errorf("--model is required")
+	}
 	if opts.timeout < 0 {
 		return fmt.Errorf("--timeout must not be negative")
 	}
@@ -158,8 +168,11 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	if err != nil {
 		return err
 	}
-	client := core.NewClient(core.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey, Timeout: opts.timeout})
-	botContext := core.NewMessagesContext(opts.model, messages)
+	client, err := core.NewClient(core.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey, Timeout: opts.timeout})
+	if err != nil {
+		return err
+	}
+	botContext := core.NewMessagesContext(strings.TrimSpace(opts.model), messages)
 	req := core.RequestOptions{ReasoningEffort: opts.reasoningEffort}
 	if cmd.Flags().Changed("temperature") {
 		// The OpenAI-compatible range is 0-2; reject anything else before
@@ -262,9 +275,9 @@ func newServeCommand() *cobra.Command {
 	flags.StringVar(&cfg.Host, "host", "127.0.0.1", "host or interface to listen on")
 	flags.IntVar(&cfg.Port, "port", 8080, "port to listen on")
 	// Everything below is a request default; any POST /ask field overrides it.
-	flags.StringVar(&cfg.BaseURL, "base-url", core.DefaultBaseURL, "OpenAI-compatible API base URL")
-	flags.StringVar(&cfg.Model, "model", core.DefaultModel, "model identifier")
-	flags.StringVar(&cfg.APIKey, "api-key", "not-needed", "API key")
+	flags.StringVar(&cfg.BaseURL, "base-url", "", "OpenAI-compatible API base URL (request default)")
+	flags.StringVar(&cfg.Model, "model", "", "model identifier (request default)")
+	flags.StringVar(&cfg.APIKey, "api-key", "", "API key (optional; OPENAI_API_KEY is used when set)")
 	flags.StringVar(&cfg.ReasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
 	flags.Float64Var(&temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&maxTokens, "max-tokens", 0, "maximum tokens to generate")
