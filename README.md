@@ -66,7 +66,7 @@ Useful options include `--system`, `--system-file`, `--user-file`, repeatable `-
 
 ## HTTP API and workbench
 
-Start the service with local upstream defaults:
+Start the service:
 
 ```sh
 efficient-daemon serve \
@@ -80,6 +80,20 @@ efficient-daemon serve \
 The browser workbench is at `http://127.0.0.1:8080/`. You can provide the model and base URL in the `serve` flags, or provide them on each `POST /ask` request. The API key can be set with `--api-key`, `OPENAI_API_KEY`, or per request. The `/config` endpoint deliberately does not return the API key.
 
 The API also exposes generated OpenAPI documentation at `/docs` and `/openapi.json`, plus `/schema/lint` for checking response schemas. The `serve` API has no authentication. Keep it bound to loopback unless you have protected network access in front of it; changing `--host` to a network interface allows clients that can reach that interface to submit requests.
+
+## Docker
+
+For a local build, copy `.env.example` to `.env`, set `EFFICIENT_DAEMON_BASE_URL` and `EFFICIENT_DAEMON_MODEL` if you want server-side request defaults, then start the service:
+
+```sh
+docker compose up --build -d
+```
+
+The API key is optional; set `EFFICIENT_DAEMON_API_KEY` only when the provider requires it. You can also leave the base URL and model unset and provide both with each `POST /ask` request. The workbench is at `http://localhost:8080/`, and the API docs are at `http://localhost:8080/docs`.
+
+Each `serve` flag also accepts a matching `EFFICIENT_DAEMON_` environment variable; explicit CLI flags take precedence. Set `EFFICIENT_DAEMON_PUBLISHED_PORT` to change the host port, while `EFFICIENT_DAEMON_PORT` changes the port inside the container.
+
+Each stable version tag publishes a multi-architecture image to `ghcr.io/beremaran/efficient-daemon`, tagged with its version and `latest`. For example, use `docker pull ghcr.io/beremaran/efficient-daemon:1.2.3` for version `v1.2.3`. The image includes Poppler for PDF input and runs as an unprivileged user.
 
 ## Development
 

@@ -200,3 +200,51 @@ func TestServeRejectsInvalidConfig(t *testing.T) {
 		}
 	}
 }
+
+func TestServeEnvironmentUsesEnvDefaultsAndRespectsFlags(t *testing.T) {
+	for _, name := range []string{
+		"EFFICIENT_DAEMON_HOST", "EFFICIENT_DAEMON_PORT", "EFFICIENT_DAEMON_BASE_URL",
+		"EFFICIENT_DAEMON_MODEL", "EFFICIENT_DAEMON_API_KEY", "EFFICIENT_DAEMON_REASONING_EFFORT",
+		"EFFICIENT_DAEMON_TEMPERATURE", "EFFICIENT_DAEMON_MAX_TOKENS", "EFFICIENT_DAEMON_TIMEOUT",
+		"EFFICIENT_DAEMON_WORKBENCH",
+	} {
+		t.Setenv(name, "")
+	}
+	t.Setenv("EFFICIENT_DAEMON_HOST", "0.0.0.0")
+	t.Setenv("EFFICIENT_DAEMON_PORT", "9090")
+	t.Setenv("EFFICIENT_DAEMON_API_KEY", "env-key")
+	t.Setenv("EFFICIENT_DAEMON_TEMPERATURE", "0")
+	t.Setenv("EFFICIENT_DAEMON_MAX_TOKENS", "64")
+	t.Setenv("EFFICIENT_DAEMON_TIMEOUT", "45s")
+	t.Setenv("EFFICIENT_DAEMON_WORKBENCH", "true")
+
+	cmd := newServeCommand()
+	if err := cmd.Flags().Parse([]string{"--host", "127.0.0.2"}); err != nil {
+		t.Fatal(err)
+	}
+	if err := applyServeEnv(cmd); err != nil {
+		t.Fatal(err)
+	}
+	flags := cmd.Flags()
+	if got, _ := flags.GetString("host"); got != "127.0.0.2" {
+		t.Fatalf("host = %q, want explicit flag value", got)
+	}
+	if got, _ := flags.GetInt("port"); got != 9090 {
+		t.Fatalf("port = %d, want env value 9090", got)
+	}
+	if got, _ := flags.GetString("api-key"); got != "env-key" {
+		t.Fatalf("api-key = %q, want env value", got)
+	}
+	if got, _ := flags.GetFloat64("temperature"); got != 0 || !flags.Changed("temperature") {
+		t.Fatalf("temperature = %v, changed = %v, want explicit env zero", got, flags.Changed("temperature"))
+	}
+	if got, _ := flags.GetInt64("max-tokens"); got != 64 {
+		t.Fatalf("max-tokens = %d, want env value 64", got)
+	}
+	if got, _ := flags.GetDuration("timeout"); got != 45*time.Second {
+		t.Fatalf("timeout = %v, want env value 45s", got)
+	}
+	if got, _ := flags.GetBool("workbench"); !got {
+		t.Fatal("workbench = false, want env value true")
+	}
+}
