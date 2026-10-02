@@ -27,12 +27,15 @@ func TestValidateInputs(t *testing.T) {
 		args    []string
 		wantErr bool
 	}{
-		{name: "prompt", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty"}, args: []string{"hello"}},
-		{name: "context", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json", context: "context.yaml"}},
-		{name: "missing input", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty"}, wantErr: true},
-		{name: "mixed modes", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty", context: "context.yaml", system: "x"}, wantErr: true},
-		{name: "invalid output", opts: options{baseURL: "https://example.com/v1", model: "test", output: "yaml"}, args: []string{"hello"}, wantErr: true},
-		{name: "negative timeout", opts: options{baseURL: "https://example.com/v1", model: "test", output: "json-pretty", timeout: -time.Second}, args: []string{"hello"}, wantErr: true},
+		{name: "prompt", opts: options{provider: "openai", baseURL: "https://example.com/v1", model: "test", output: "json-pretty"}, args: []string{"hello"}},
+		{name: "context", opts: options{provider: "openai", baseURL: "https://example.com/v1", model: "test", output: "json", context: "context.yaml"}},
+		{name: "missing input", opts: options{provider: "openai", baseURL: "https://example.com/v1", model: "test", output: "json-pretty"}, wantErr: true},
+		{name: "mixed modes", opts: options{provider: "openai", baseURL: "https://example.com/v1", model: "test", output: "json-pretty", context: "context.yaml", system: "x"}, wantErr: true},
+		{name: "invalid output", opts: options{provider: "openai", baseURL: "https://example.com/v1", model: "test", output: "yaml"}, args: []string{"hello"}, wantErr: true},
+		{name: "jevjam without model", opts: options{provider: "jevjam", baseURL: "https://example.com", output: "json"}, args: []string{"hello"}},
+		{name: "openai without model", opts: options{provider: "openai", baseURL: "https://example.com/v1", output: "json"}, args: []string{"hello"}, wantErr: true},
+		{name: "unknown provider", opts: options{provider: "other", baseURL: "https://example.com/v1", model: "test", output: "json"}, args: []string{"hello"}, wantErr: true},
+		{name: "negative timeout", opts: options{provider: "openai", baseURL: "https://example.com/v1", model: "test", output: "json-pretty", timeout: -time.Second}, args: []string{"hello"}, wantErr: true},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -246,5 +249,34 @@ func TestServeEnvironmentUsesEnvDefaultsAndRespectsFlags(t *testing.T) {
 	}
 	if got, _ := flags.GetBool("workbench"); !got {
 		t.Fatal("workbench = false, want env value true")
+	}
+}
+
+func TestCommandJevjamEndToEnd(t *testing.T) {
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		_, _ = io.WriteString(w, `{"answers":{"leave":{"noul":0.9}}}`)
+	}))
+	defer server.Close()
+
+	schemaPath := filepath.Join(t.TempDir(), "schema.json")
+	if err := os.WriteFile(schemaPath, []byte(`{"type":"object","properties":{"leave":{"type":"boolean"}},"required":["leave"]}`), 0o600); err != nil {
+		t.Fatal(err)
+	}
+
+	cmd := newRootCommand()
+	var stdout bytes.Buffer
+	cmd.SetOut(&stdout)
+	cmd.SetArgs([]string{"ask", "--provider", "jevjam", "--base-url", server.URL, "--schema", schemaPath, "--output", "json", "hello"})
+	if err := cmd.Execute(); err != nil {
+		t.Fatal(err)
+	}
+	if got, want := stdout.String(), "{\"leave\":true}\n"; got != want {
+		t.Fatalf("got %q, want %q", got, want)
+	}
+
+	cmd = newRootCommand()
+	cmd.SetArgs([]string{"ask", "--provider", "jevjam", "--base-url", server.URL, "--schema", schemaPath, "--max-tokens", "5", "hello"})
+	if err := cmd.Execute(); err == nil || !strings.Contains(err.Error(), "--max-tokens does not apply") {
+		t.Fatalf("err = %v", err)
 	}
 }

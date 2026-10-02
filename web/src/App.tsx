@@ -22,6 +22,7 @@ const IDLE_STATE: RunState = {
   status: null,
   latencyMs: null,
   responseText: "",
+  answers: null,
   error: null,
   requestPreview: "",
 };
@@ -39,6 +40,7 @@ export default function App() {
   const effectiveSettings = useMemo(
     () => ({
       ...draft.settings,
+      provider: draft.settings.provider || String(serverDefaults.provider ?? ""),
       model: draft.settings.model.trim() || String(serverDefaults.model ?? "").trim(),
       baseURL: draft.settings.baseURL.trim() || String(serverDefaults.baseURL ?? "").trim(),
     }),
@@ -56,21 +58,23 @@ export default function App() {
           baseURL: cfg["base-url"] ?? "",
           reasoningEffort: cfg["reasoning-effort"] ?? "",
           timeout: prettyDuration(cfg.timeout ?? ""),
+          provider: cfg.provider ?? "",
+          maxScoreLevels: String(cfg["max-score-levels"] ?? ""),
         });
       })
       .catch(() => {});
   }, []);
 
-  const runLint = useCallback(async (schema: string) => {
+  const runLint = useCallback(async (schema: string, provider: string, maxScoreLevels: string) => {
     setLinting(true);
-    const result = await lintSchema(schema);
+    const result = await lintSchema(schema, provider, maxScoreLevels);
     setLintResult(result);
     setLinting(false);
   }, []);
 
   useEffect(() => {
-    void runLint(debouncedSchema);
-  }, [debouncedSchema, runLint]);
+    void runLint(debouncedSchema, effectiveSettings.provider, effectiveSettings.maxScoreLevels);
+  }, [debouncedSchema, effectiveSettings.provider, effectiveSettings.maxScoreLevels, runLint]);
 
   const requestPreview = useMemo(() => {
     try {
@@ -83,9 +87,10 @@ export default function App() {
   const lintErrors = lintResult && !linting ? lintResult.errors : [];
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
+  const jevjam = effectiveSettings.provider === "jevjam";
   const canRun =
     !run.running &&
-    !!model &&
+    (!!model || jevjam) &&
     !!baseURL &&
     draft.parts.length > 0 &&
     lintErrors.length === 0 &&
@@ -121,6 +126,7 @@ export default function App() {
         status: res.status,
         latencyMs,
         responseText: text,
+        answers: res.headers.get("X-Jevjam-Answers"),
         error: res.ok ? null : text,
         requestPreview: requestPreview,
       };
@@ -146,6 +152,7 @@ export default function App() {
         status: null,
         latencyMs: null,
         responseText: "",
+        answers: null,
         error: message,
         requestPreview: requestPreview,
       });
@@ -168,6 +175,8 @@ export default function App() {
     const req = record.request as Record<string, unknown>;
     const settings: Settings = {
       ...draft.settings,
+      provider: (req.provider as string) ?? "",
+      maxScoreLevels: req["max-score-levels"] !== undefined ? String(req["max-score-levels"]) : "",
       model: (req.model as string) ?? "",
       baseURL: (req["base-url"] as string) ?? "",
       apiKey: (req["api-key"] as string) ?? "",
@@ -215,24 +224,26 @@ export default function App() {
             </details>
           </Card>
 
-          <Card>
-            <details className="group">
-              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                <CardHeader className="flex-row items-center justify-between pb-4">
-                  <CardTitle className="text-sm">System message</CardTitle>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                </CardHeader>
-              </summary>
-              <CardContent>
-                <Textarea
-                  value={draft.system}
-                  onChange={(e) => setDraft({ ...draft, system: e.target.value })}
-                  placeholder="Optional system message…"
-                  className="min-h-[60px]"
-                />
-              </CardContent>
-            </details>
-          </Card>
+          {!jevjam && (
+            <Card>
+              <details className="group">
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <CardHeader className="flex-row items-center justify-between pb-4">
+                    <CardTitle className="text-sm">System message</CardTitle>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </CardHeader>
+                </summary>
+                <CardContent>
+                  <Textarea
+                    value={draft.system}
+                    onChange={(e) => setDraft({ ...draft, system: e.target.value })}
+                    placeholder="Optional system message…"
+                    className="min-h-[60px]"
+                  />
+                </CardContent>
+              </details>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-2">
@@ -240,7 +251,7 @@ export default function App() {
             </CardHeader>
             <CardContent>
               <PartsEditor
-                system={draft.system}
+                system={jevjam ? "" : draft.system}
                 parts={draft.parts}
                 onPartsChange={(parts) => setDraft({ ...draft, parts })}
                 schemaText={draft.schema}

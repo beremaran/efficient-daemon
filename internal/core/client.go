@@ -18,6 +18,20 @@ const (
 	DefaultTimeout = 5 * time.Minute
 )
 
+// Providers answer a request: an OpenAI-compatible LLM or a jevjam server.
+const (
+	ProviderOpenAI = "openai"
+	ProviderJevjam = "jevjam"
+)
+
+// ValidateProvider accepts the known provider names.
+func ValidateProvider(name string) error {
+	if name != ProviderOpenAI && name != ProviderJevjam {
+		return fmt.Errorf("invalid provider %q (want openai or jevjam)", name)
+	}
+	return nil
+}
+
 // Config holds the connection settings for the LLM client.
 type Config struct {
 	BaseURL string
