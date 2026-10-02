@@ -4,6 +4,7 @@
 package server
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -19,8 +20,10 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf16"
 
 	"github.com/beremaran/efficient-daemon/internal/core"
+	"github.com/beremaran/efficient-daemon/internal/jevjam"
 	"github.com/beremaran/efficient-daemon/internal/message"
 	"github.com/beremaran/efficient-daemon/internal/output"
 	responseschema "github.com/beremaran/efficient-daemon/internal/schema"
@@ -40,6 +43,7 @@ type Config struct {
 	// Workbench mounts the embedded UI at / (see internal/workbench).
 	Workbench bool
 	// Request defaults; every POST /ask field overrides these.
+	Provider        string
 	BaseURL         string
 	APIKey          string
 	Model           string
@@ -47,12 +51,14 @@ type Config struct {
 	Temperature     *float64
 	MaxTokens       *int64
 	Timeout         time.Duration
+	MaxScoreLevels  int
 }
 
 // AskRequest is the body of POST /ask: the ask command's flags as JSON, minus
 // file paths (media travels inline) and the output-format flag. Field names
 // match the CLI flags.
 type AskRequest struct {
+	Provider        string          `json:"provider,omitempty" jsonschema:"description=openai or jevjam; empty keeps the server default."`
 	Schema          json.RawMessage `json:"schema" jsonschema:"description=JSON Schema the model response must satisfy (strict structured-output subset)."`
 	System          string          `json:"system,omitempty" jsonschema:"description=Optional system message."`
 	Parts           []message.Part  `json:"parts" jsonschema:"description=The user message; at least one part, each with exactly one of text, image, or pdf."`
@@ -63,6 +69,7 @@ type AskRequest struct {
 	Temperature     *float64        `json:"temperature,omitempty"`
 	MaxTokens       *int64          `json:"max-tokens,omitempty"`
 	Timeout         string          `json:"timeout,omitempty" jsonschema:"description=Per-attempt timeout as a Go duration (e.g. 30s); empty keeps the server default."`
+	MaxScoreLevels  *int            `json:"max-score-levels,omitempty" jsonschema:"description=jevjam only: most values a bounded integer property may span."`
 }
 
 // New builds the HTTP handler and generates the OpenAPI document.
@@ -100,23 +107,35 @@ type handler struct{ defaults Config }
 // settings is the per-request configuration after merging the body over the
 // startup defaults.
 type settings struct {
-	model, baseURL, apiKey, effort string
-	temperature                    *float64
-	maxTokens                      *int64
-	timeout                        time.Duration
+	provider, model, baseURL, apiKey, effort string
+	temperature                              *float64
+	maxTokens                                *int64
+	timeout                                  time.Duration
+	maxScoreLevels                           int
 }
 
 // resolve merges request fields over the server defaults and validates the
 // result with the same rules the CLI applies to its flags.
 func (h *handler) resolve(req AskRequest) (settings, error) {
 	s := settings{
-		model:       firstNonEmpty(strings.TrimSpace(req.Model), strings.TrimSpace(h.defaults.Model)),
-		baseURL:     firstNonEmpty(strings.TrimSpace(req.BaseURL), strings.TrimSpace(h.defaults.BaseURL)),
-		apiKey:      strings.TrimSpace(firstNonEmpty(req.APIKey, h.defaults.APIKey)),
-		effort:      strings.TrimSpace(firstNonEmpty(req.ReasoningEffort, h.defaults.ReasoningEffort)),
-		temperature: orDefault(req.Temperature, h.defaults.Temperature),
-		maxTokens:   orDefault(req.MaxTokens, h.defaults.MaxTokens),
-		timeout:     h.defaults.Timeout,
+		provider:       firstNonEmpty(strings.TrimSpace(req.Provider), h.defaults.Provider, core.ProviderOpenAI),
+		model:          firstNonEmpty(strings.TrimSpace(req.Model), strings.TrimSpace(h.defaults.Model)),
+		baseURL:        firstNonEmpty(strings.TrimSpace(req.BaseURL), strings.TrimSpace(h.defaults.BaseURL)),
+		apiKey:         strings.TrimSpace(firstNonEmpty(req.APIKey, h.defaults.APIKey)),
+		effort:         strings.TrimSpace(firstNonEmpty(req.ReasoningEffort, h.defaults.ReasoningEffort)),
+		temperature:    orDefault(req.Temperature, h.defaults.Temperature),
+		maxTokens:      orDefault(req.MaxTokens, h.defaults.MaxTokens),
+		timeout:        h.defaults.Timeout,
+		maxScoreLevels: *orDefault(req.MaxScoreLevels, &h.defaults.MaxScoreLevels),
+	}
+	if s.maxScoreLevels == 0 {
+		s.maxScoreLevels = jevjam.DefaultMaxScoreLevels
+	}
+	if err := core.ValidateProvider(s.provider); err != nil {
+		return s, err
+	}
+	if s.provider == core.ProviderJevjam && (req.System != "" || req.ReasoningEffort != "" || req.Temperature != nil || req.MaxTokens != nil) {
+		return s, errors.New("system, reasoning-effort, temperature, and max-tokens do not apply to the jevjam provider")
 	}
 	if req.Timeout != "" {
 		parsed, err := time.ParseDuration(req.Timeout)
@@ -166,7 +185,7 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	if strings.TrimSpace(cfg.model) == "" {
+	if strings.TrimSpace(cfg.model) == "" && cfg.provider != core.ProviderJevjam {
 		writeError(w, http.StatusBadRequest, errors.New("model is required; set --model on the server or include it in the request"))
 		return
 	}
@@ -184,8 +203,16 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, err)
 		return
 	}
-	for _, warning := range responseschema.StrictSubsetWarnings(req.Schema, "") {
-		log.Printf("warning: %s", warning)
+	var plan jevjam.Plan
+	if cfg.provider == core.ProviderJevjam {
+		if plan, err = jevjam.NewPlan(req.Schema, cfg.maxScoreLevels); err != nil {
+			writeError(w, http.StatusBadRequest, err)
+			return
+		}
+	} else {
+		for _, warning := range responseschema.StrictSubsetWarnings(req.Schema, "") {
+			log.Printf("warning: %s", warning)
+		}
 	}
 
 	dir, err := os.MkdirTemp("", "efficient-daemon-ask-*")
@@ -209,18 +236,26 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	client, err := core.NewClient(core.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Timeout: cfg.timeout})
-	if err != nil {
-		writeError(w, http.StatusBadRequest, err)
-		return
-	}
-	botContext := core.NewMessagesContext(cfg.model, messages)
+	var raw json.RawMessage
 	started := time.Now()
-	raw, err := core.AskSchema(r.Context(), client, botContext, schemaMap, core.RequestOptions{
-		ReasoningEffort: cfg.effort,
-		Temperature:     cfg.temperature,
-		MaxTokens:       cfg.maxTokens,
-	})
+	if plan != nil {
+		var answers json.RawMessage
+		raw, answers, err = jevjam.Ask(r.Context(), jevjam.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Model: cfg.model, Timeout: cfg.timeout}, plan, messages)
+		if answers != nil {
+			w.Header().Set("X-Jevjam-Answers", headerJSON(answers))
+		}
+	} else {
+		client, clientErr := core.NewClient(core.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Timeout: cfg.timeout})
+		if clientErr != nil {
+			writeError(w, http.StatusBadRequest, clientErr)
+			return
+		}
+		raw, err = core.AskSchema(r.Context(), client, core.NewMessagesContext(cfg.model, messages), schemaMap, core.RequestOptions{
+			ReasoningEffort: cfg.effort,
+			Temperature:     cfg.temperature,
+			MaxTokens:       cfg.maxTokens,
+		})
+	}
 	// Set before any WriteHeader path (success, 422, writeError) so every
 	// response carries the model-call latency the workbench displays.
 	w.Header().Set("X-Latency-Ms", strconv.FormatInt(time.Since(started).Milliseconds(), 10))
@@ -299,6 +334,26 @@ func upstreamStatus(err error) int {
 		return http.StatusGatewayTimeout
 	}
 	return http.StatusBadGateway
+}
+
+// headerJSON compacts JSON onto one line and escapes non-ASCII runes, since
+// header values are read as Latin-1.
+func headerJSON(raw json.RawMessage) string {
+	var compact bytes.Buffer
+	if json.Compact(&compact, raw) != nil {
+		return ""
+	}
+	var b strings.Builder
+	for _, r := range compact.String() {
+		if r < 0x80 {
+			b.WriteRune(r)
+			continue
+		}
+		for _, unit := range utf16.Encode([]rune{r}) {
+			fmt.Fprintf(&b, `\u%04x`, unit)
+		}
+	}
+	return b.String()
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {

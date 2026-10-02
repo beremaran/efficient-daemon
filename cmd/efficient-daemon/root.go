@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/beremaran/efficient-daemon/internal/core"
+	"github.com/beremaran/efficient-daemon/internal/jevjam"
 	"github.com/beremaran/efficient-daemon/internal/message"
 	"github.com/beremaran/efficient-daemon/internal/output"
 	responseschema "github.com/beremaran/efficient-daemon/internal/schema"
@@ -24,6 +25,8 @@ import (
 )
 
 type options struct {
+	provider        string
+	maxScoreLevels  int
 	baseURL         string
 	model           string
 	apiKey          string
@@ -70,7 +73,10 @@ func newAskCommand() *cobra.Command {
 			if len(args) > 1 {
 				return fmt.Errorf("accepts at most one prompt argument")
 			}
-			return validateInputs(opts, args)
+			if err := validateInputs(opts, args); err != nil {
+				return err
+			}
+			return rejectLLMOnlyFlags(cmd, opts.provider)
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return run(cmd, opts, args)
@@ -78,9 +84,10 @@ func newAskCommand() *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&opts.baseURL, "base-url", "", "OpenAI-compatible API base URL (required)")
-	flags.StringVar(&opts.model, "model", "", "model identifier (required)")
-	flags.StringVar(&opts.apiKey, "api-key", "", "API key (optional; OPENAI_API_KEY is used when set)")
+	flags.StringVar(&opts.provider, "provider", core.ProviderOpenAI, "provider: openai or jevjam")
+	flags.StringVar(&opts.baseURL, "base-url", "", "API base URL (required)")
+	flags.StringVar(&opts.model, "model", "", "model identifier (required for openai; optional for jevjam)")
+	flags.StringVar(&opts.apiKey, "api-key", "", apiKeyHelp)
 	flags.StringVar(&opts.schema, "schema", "", "JSON Schema file for the response (required)")
 	flags.StringVar(&opts.context, "context", "", "YAML or JSON context file")
 	flags.StringVar(&opts.system, "system", "", "system message")
@@ -92,6 +99,7 @@ func newAskCommand() *cobra.Command {
 	flags.Float64Var(&opts.temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&opts.maxTokens, "max-tokens", 0, "maximum tokens to generate")
 	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
+	flags.IntVar(&opts.maxScoreLevels, "max-score-levels", jevjam.DefaultMaxScoreLevels, "jevjam: most values a bounded integer property may span")
 	_ = cmd.MarkFlagRequired("schema")
 	return cmd
 }
@@ -113,14 +121,36 @@ func newSchemaCommand() *cobra.Command {
 	}
 }
 
+// apiKeyHelp documents the per-provider key fallbacks.
+const apiKeyHelp = "API key (optional; falls back to OPENAI_API_KEY, or JEVJAM_API_KEY for jevjam)"
+
+// llmOnlyFlags configure LLM sampling, which jevjam does not do.
+var llmOnlyFlags = []string{"system", "system-file", "reasoning-effort", "temperature", "max-tokens"}
+
+// rejectLLMOnlyFlags fails when a flag jevjam ignores was set explicitly.
+func rejectLLMOnlyFlags(cmd *cobra.Command, provider string) error {
+	if provider != core.ProviderJevjam {
+		return nil
+	}
+	for _, name := range llmOnlyFlags {
+		if flag := cmd.Flags().Lookup(name); flag != nil && flag.Changed {
+			return fmt.Errorf("--%s does not apply to the jevjam provider", name)
+		}
+	}
+	return nil
+}
+
 func validateInputs(opts options, args []string) error {
+	if err := core.ValidateProvider(opts.provider); err != nil {
+		return fmt.Errorf("--provider: %w", err)
+	}
 	if strings.TrimSpace(opts.baseURL) == "" {
 		return fmt.Errorf("--base-url is required")
 	}
 	if err := core.ValidateBaseURL(opts.baseURL); err != nil {
 		return fmt.Errorf("--base-url: %w", err)
 	}
-	if strings.TrimSpace(opts.model) == "" {
+	if strings.TrimSpace(opts.model) == "" && opts.provider != core.ProviderJevjam {
 		return fmt.Errorf("--model is required")
 	}
 	if opts.timeout < 0 {
@@ -160,13 +190,30 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 	if err != nil {
 		return err
 	}
-	for _, warning := range responseschema.StrictSubsetWarnings(rawSchema, opts.schema) {
-		fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s is an object without additionalProperties: false; strict structured output may reject this schema\n", warning)
+	// The strict-subset rule is an OpenAI structured-output concern.
+	if opts.provider != core.ProviderJevjam {
+		for _, warning := range responseschema.StrictSubsetWarnings(rawSchema, opts.schema) {
+			fmt.Fprintf(cmd.ErrOrStderr(), "warning: %s is an object without additionalProperties: false; strict structured output may reject this schema\n", warning)
+		}
 	}
 
 	messages, err := buildMessages(opts, args)
 	if err != nil {
 		return err
+	}
+	if opts.provider == core.ProviderJevjam {
+		plan, err := jevjam.NewPlan(rawSchema, opts.maxScoreLevels)
+		if err != nil {
+			return err
+		}
+		raw, _, err := jevjam.Ask(cmd.Context(), jevjam.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey, Model: opts.model, Timeout: opts.timeout}, plan, messages)
+		if err != nil {
+			return fmt.Errorf("ask jevjam: %w", err)
+		}
+		if err := responseschema.ValidateValue(sch, raw); err != nil {
+			return err
+		}
+		return output.Write(cmd.OutOrStdout(), raw, opts.output)
 	}
 	client, err := core.NewClient(core.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey, Timeout: opts.timeout})
 	if err != nil {
@@ -262,6 +309,9 @@ func newServeCommand() *cobra.Command {
 			if err := applyServeEnv(cmd); err != nil {
 				return err
 			}
+			if err := rejectLLMOnlyFlags(cmd, cfg.Provider); err != nil {
+				return err
+			}
 			flags := cmd.Flags()
 			if flags.Changed("temperature") {
 				cfg.Temperature = &temperature
@@ -278,20 +328,22 @@ func newServeCommand() *cobra.Command {
 	flags.StringVar(&cfg.Host, "host", "127.0.0.1", "host or interface to listen on")
 	flags.IntVar(&cfg.Port, "port", 8080, "port to listen on")
 	// Everything below is a request default; any POST /ask field overrides it.
-	flags.StringVar(&cfg.BaseURL, "base-url", "", "OpenAI-compatible API base URL (request default)")
+	flags.StringVar(&cfg.Provider, "provider", core.ProviderOpenAI, "provider: openai or jevjam (request default)")
+	flags.StringVar(&cfg.BaseURL, "base-url", "", "API base URL (request default)")
 	flags.StringVar(&cfg.Model, "model", "", "model identifier (request default)")
-	flags.StringVar(&cfg.APIKey, "api-key", "", "API key (optional; OPENAI_API_KEY is used when set)")
+	flags.StringVar(&cfg.APIKey, "api-key", "", apiKeyHelp)
 	flags.StringVar(&cfg.ReasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
 	flags.Float64Var(&temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&maxTokens, "max-tokens", 0, "maximum tokens to generate")
 	flags.DurationVar(&cfg.Timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
+	flags.IntVar(&cfg.MaxScoreLevels, "max-score-levels", jevjam.DefaultMaxScoreLevels, "jevjam: most values a bounded integer property may span (request default)")
 	flags.BoolVar(&workbench, "workbench", false, "serve the interactive workbench UI at / (assets are embedded)")
 	return cmd
 }
 
 func applyServeEnv(cmd *cobra.Command) error {
 	flags := cmd.Flags()
-	for _, name := range []string{"host", "port", "base-url", "model", "api-key", "reasoning-effort", "temperature", "max-tokens", "timeout", "workbench"} {
+	for _, name := range []string{"host", "port", "provider", "base-url", "model", "api-key", "reasoning-effort", "temperature", "max-tokens", "timeout", "max-score-levels", "workbench"} {
 		if flags.Changed(name) {
 			continue
 		}

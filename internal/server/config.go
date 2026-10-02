@@ -9,6 +9,8 @@ import (
 	"encoding/json"
 	"net/http"
 
+	"github.com/beremaran/efficient-daemon/internal/core"
+	"github.com/beremaran/efficient-daemon/internal/jevjam"
 	responseschema "github.com/beremaran/efficient-daemon/internal/schema"
 )
 
@@ -17,30 +19,37 @@ import (
 // and the UI is reachable from any browser that can reach the server.
 type configResponse struct {
 	Version         string   `json:"version"`
+	Provider        string   `json:"provider"`
 	Model           string   `json:"model"`
 	BaseURL         string   `json:"base-url"`
 	ReasoningEffort string   `json:"reasoning-effort"`
 	Temperature     *float64 `json:"temperature"`
 	MaxTokens       *int64   `json:"max-tokens"`
 	Timeout         string   `json:"timeout"`
+	MaxScoreLevels  int      `json:"max-score-levels"`
 }
 
 func (h *handler) handleConfig(w http.ResponseWriter, _ *http.Request) {
 	d := h.defaults
+	s, _ := h.resolve(AskRequest{})
 	writeJSON(w, http.StatusOK, configResponse{
 		Version:         d.Version,
+		Provider:        s.provider,
 		Model:           d.Model,
 		BaseURL:         d.BaseURL,
 		ReasoningEffort: d.ReasoningEffort,
 		Temperature:     d.Temperature,
 		MaxTokens:       d.MaxTokens,
 		Timeout:         d.Timeout.String(),
+		MaxScoreLevels:  s.maxScoreLevels,
 	})
 }
 
-// lintRequest mirrors the schema field of AskRequest.
+// lintRequest mirrors the AskRequest fields that decide how a schema is read.
 type lintRequest struct {
-	Schema json.RawMessage `json:"schema"`
+	Schema         json.RawMessage `json:"schema"`
+	Provider       string          `json:"provider,omitempty"`
+	MaxScoreLevels *int            `json:"max-score-levels,omitempty"`
 }
 
 // lintResponse is the outcome of checking one schema document. valid=false
@@ -65,6 +74,11 @@ func (h *handler) handleLint(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "schema is required"})
 		return
 	}
+	cfg, err := h.resolve(AskRequest{Provider: req.Provider, MaxScoreLevels: req.MaxScoreLevels})
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]string{"error": err.Error()})
+		return
+	}
 
 	resp := lintResponse{Valid: true, Errors: []string{}, Warnings: []string{}}
 	if _, err := responseschema.Parse(req.Schema); err != nil {
@@ -76,6 +90,14 @@ func (h *handler) handleLint(w http.ResponseWriter, r *http.Request) {
 	if _, err := responseschema.Compile(req.Schema, ""); err != nil {
 		resp.Valid = false
 		resp.Errors = append(resp.Errors, err.Error())
+		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	if cfg.provider == core.ProviderJevjam {
+		if _, err := jevjam.NewPlan(req.Schema, cfg.maxScoreLevels); err != nil {
+			resp.Valid = false
+			resp.Errors = append(resp.Errors, err.Error())
+		}
 		writeJSON(w, http.StatusOK, resp)
 		return
 	}
