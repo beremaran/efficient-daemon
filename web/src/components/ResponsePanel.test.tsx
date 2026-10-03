@@ -54,3 +54,16 @@ describe("ResponsePanel empty state", () => {
     expect(html).not.toContain("Add a Part");
   });
 });
+
+describe("ResponsePanel download", () => {
+  it("disables Download when there is no response", () => {
+    const html = renderToStaticMarkup(<ResponsePanel state={base} />);
+    expect(html).toMatch(/<button[^>]*disabled=""[^>]*>Download<\/button>/);
+  });
+
+  it("enables Download once there is a response", () => {
+    const html = renderToStaticMarkup(<ResponsePanel state={{ ...base, status: 200, responseText: "{}" }} />);
+    expect(html).not.toMatch(/<button[^>]*disabled=""[^>]*>Download<\/button>/);
+    expect(html).toContain("Download</button>");
+  });
+});

@@ -3,10 +3,12 @@ import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { CopyButton } from "@/components/CopyButton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { prettyJson } from "@/lib/ask";
+import { downloadText } from "@/lib/download";
 import { useState } from "react";
 
 export interface RunState {
@@ -58,6 +60,9 @@ export function ResponsePanel({ state }: { state: RunState }) {
             Copy response
           </CopyButton>
         )}
+        <Button variant="ghost" size="sm" disabled={!responseText} onClick={() => downloadText(shown, "response.json")}>
+          Download
+        </Button>
       </div>
 
       {/* Stays mounted so screen readers announce text changes. */}
