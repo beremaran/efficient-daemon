@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PartEditor, PartsEditor, UndoNotice } from "@/components/PartsEditor";
-import { checkImageFile, dragHasFiles, readDroppedFile, readPartFile } from "@/lib/media";
+import { checkImageFile, dragHasFiles, pastedImage, readDroppedFile, readPartFile } from "@/lib/media";
 import { newPart } from "@/lib/parts";
 import { MAX_IMAGE_BYTES, type Part } from "@/lib/types";
 
@@ -203,5 +203,36 @@ describe("file drop", () => {
     expect(dragHasFiles({ types: ["Files"] })).toBe(true);
     expect(dragHasFiles({ types: ["text/plain"] })).toBe(false);
     expect(dragHasFiles(null)).toBe(false);
+  });
+});
+
+describe("image paste", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("loads a pasted image the way a dropped file loads", async () => {
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result = "data:;base64,QUJD";
+        onload?: () => void;
+        readAsDataURL() {
+          this.onload?.();
+        }
+      },
+    );
+    const file = { name: "image.png", type: "image/png", size: 3 } as File;
+    const pasted = pastedImage({ files: [file] as unknown as FileList });
+    expect(pasted).toBe(file);
+    expect(await readDroppedFile("image", pasted as File)).toEqual({ base64: "QUJD" });
+  });
+
+  it("ignores pasted text", () => {
+    expect(pastedImage({ files: [] as unknown as FileList })).toBeUndefined();
+    expect(pastedImage(null)).toBeUndefined();
+  });
+
+  it("ignores a pasted file that is not an image", () => {
+    const file = { name: "a.pdf", type: "application/pdf", size: 3 } as File;
+    expect(pastedImage({ files: [file] as unknown as FileList })).toBeUndefined();
   });
 });

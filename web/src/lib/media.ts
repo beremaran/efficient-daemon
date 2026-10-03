@@ -50,6 +50,10 @@ export async function readPartFile(
 /** True when a drag carries files. */
 export const dragHasFiles = (dt: Pick<DataTransfer, "types"> | null): boolean => Array.from(dt?.types ?? []).includes("Files");
 
+/** The first image file on the clipboard, if any; pasted text yields none. */
+export const pastedImage = (dt: Pick<DataTransfer, "files"> | null): File | undefined =>
+  Array.from(dt?.files ?? []).find((f) => f.type.startsWith("image/"));
+
 /** Reads a file dropped on an image or PDF Part; a wrong type, size or read failure comes back as a message. */
 export async function readDroppedFile(
   kind: "image" | "pdf",
