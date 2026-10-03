@@ -1,7 +1,7 @@
 BIN := bin/efficient-daemon
 WEB_DIR := web
 
-.PHONY: build test fmt vet clean help build-web dev-web licenses
+.PHONY: build test test-web fmt vet clean help build-web dev-web licenses
 
 build:            ## Build the CLI into ./bin/efficient-daemon
 	@mkdir -p bin
@@ -20,8 +20,11 @@ licenses:         ## Refresh third-party license notices for the Go binary and w
 dev-web:          ## Run the workbench UI dev server (proxies /ask, /config, /schema/lint to :8080)
 	cd $(WEB_DIR) && npm run dev
 
-test:             ## Run all tests
+test:             ## Run all Go tests
 	go test ./...
+
+test-web:         ## Run the workbench tests (needs node/npm)
+	cd $(WEB_DIR) && npm test
 
 fmt:              ## Format all source files
 	gofmt -w cmd internal

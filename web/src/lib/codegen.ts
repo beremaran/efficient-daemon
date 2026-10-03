@@ -1,8 +1,9 @@
 // Snippet generation for the Codegen tab. Every target renders the same
-// request: POST /ask on the daemon, schema inlined.
+// Ask request: POST /ask on the daemon, schema inlined.
 // Large base64 values are elided for display only; copied text is always full.
 
-import type { Part, Settings } from "@/lib/types";
+import { cliArgs, shellQuote, type AskBody } from "@/lib/ask";
+import type { Part } from "@/lib/types";
 
 export interface Snippet {
   label: string;
@@ -16,86 +17,27 @@ export function elideBase64(code: string): string {
   );
 }
 
-/** Shell single-quote escaping: 'foo' → 'foo'\'' */
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", `'\\''`)}'`;
-}
-
-export function buildBody(
-  parts: Part[],
-  system: string,
-  schema: string,
-  settings: Settings,
-): Record<string, unknown> {
-  const s = settings;
-  const jevjam = s.provider === "jevjam";
-  const body: Record<string, unknown> = { schema: JSON.parse(schema) };
-  if (s.provider) body.provider = s.provider;
-  if (system.trim() && !jevjam) body.system = system;
-  body.parts = parts.map((p) => {
-    if (p.kind === "text") return { text: p.text ?? "" };
-    if (p.kind === "image") return { image: p.image ?? "" };
-    return { pdf: p.pdf ?? "" };
-  });
-  if (s.model.trim()) body.model = s.model.trim();
-  if (s.baseURL.trim()) body["base-url"] = s.baseURL.trim();
-  if (s.apiKey.trim()) body["api-key"] = s.apiKey.trim();
-  if (s.timeout.trim()) body.timeout = s.timeout.trim();
-  if (jevjam) {
-    if (s.maxScoreLevels.trim()) body["max-score-levels"] = Number(s.maxScoreLevels);
-    return body;
-  }
-  if (s.reasoningEffort.trim()) body["reasoning-effort"] = s.reasoningEffort.trim();
-  if (s.temperatureEnabled && s.temperature.trim()) body.temperature = Number(s.temperature);
-  if (s.maxTokensEnabled && s.maxTokens.trim()) body["max-tokens"] = Number(s.maxTokens);
-  return body;
-}
-
 export function generateSnippets(
+  request: { body: AskBody; json: string },
   parts: Part[],
-  system: string,
   schema: string,
-  settings: Settings,
   origin: string,
 ): Snippet[] {
-  const body = buildBody(parts, system, schema, settings);
-  const bodyJSON = JSON.stringify(body, null, 2);
-  const s = settings;
-  const jevjam = s.provider === "jevjam";
+  const bodyJSON = request.json;
 
-  // CLI: schema via heredoc, one prompt arg, --image flags. The ask CLI has no
-  // PDF flag, so PDF parts are noted as API-only.
-  const textParts = parts.filter((p) => p.kind === "text");
-  const prompt = textParts.map((p) => p.text ?? "").join("\n\n");
-  const imageFlags = parts
-    .filter((p) => p.kind === "image")
-    .map((p) =>
-      p.source === "url"
-        ? `  --image ${shellQuote(p.image ?? "")}`
-        : `  --image ${shellQuote(`./${p.fileName ?? "image"}`)} # place the uploaded file at this path`,
-    );
-  const pdfNote = parts.some((p) => p.kind === "pdf")
-    ? "# note: PDF parts are only supported over the HTTP API (see the curl tab)\n"
-    : "";
-  const cliFlags =
-    (s.provider ? ` \\\n  --provider ${shellQuote(s.provider)}` : "") +
-    (s.model.trim() ? ` \\\n  --model ${shellQuote(s.model.trim())}` : "") +
-    (s.baseURL.trim() ? ` \\\n  --base-url ${shellQuote(s.baseURL.trim())}` : "") +
-    (s.apiKey.trim() ? ` \\\n  --api-key ${shellQuote(s.apiKey.trim())}` : "") +
-    (s.timeout.trim() ? ` \\\n  --timeout ${shellQuote(s.timeout.trim())}` : "") +
-    (jevjam && s.maxScoreLevels.trim() ? ` \\\n  --max-score-levels ${Number(s.maxScoreLevels)}` : "") +
-    (!jevjam && s.reasoningEffort.trim() ? ` \\\n  --reasoning-effort ${shellQuote(s.reasoningEffort.trim())}` : "") +
-    (!jevjam && s.temperatureEnabled && s.temperature.trim()
-      ? ` \\\n  --temperature ${Number(s.temperature)}`
+  // CLI: schema via heredoc, then the Ask request's flags and parts.
+  const notes =
+    (parts.some((p) => p.kind === "pdf")
+      ? "# note: PDF parts are only supported over the HTTP API (see the curl tab)\n"
       : "") +
-    (!jevjam && s.maxTokensEnabled && s.maxTokens.trim() ? ` \\\n  --max-tokens ${Number(s.maxTokens)}` : "");
-
+    (parts.some((p) => p.kind === "image" && p.source !== "url")
+      ? "# note: place uploaded images at the ./ paths below\n"
+      : "");
   const cli =
     `cat > schema.json <<'EOF'\n${schema.trim()}\nEOF\n\n` +
-    pdfNote +
-    `efficient-daemon ask${cliFlags} \\\n  --schema schema.json` +
-    (prompt ? ` \\\n  ${shellQuote(prompt)}` : "") +
-    imageFlags.map((f) => ` \\\n${f}`).join("");
+    notes +
+    `efficient-daemon ask` +
+    cliArgs(request.body, parts).map((arg) => ` \\\n  ${arg}`).join("");
 
   const curl =
     `curl -sS ${origin}/ask \\\n` +

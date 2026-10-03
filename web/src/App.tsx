@@ -12,10 +12,10 @@ import { SchemaPanel } from "@/components/SchemaPanel";
 import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
-import { buildBody } from "@/lib/codegen";
+import { buildAskRequest, lintBody } from "@/lib/ask";
 import { lintSchema, type LintResult } from "@/lib/lint";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
-import type { Part, RunRecord, Settings } from "@/lib/types";
+import type { RunRecord, Settings } from "@/lib/types";
 
 const IDLE_STATE: RunState = {
   running: false,
@@ -36,8 +36,6 @@ export default function App() {
   const [run, setRun] = useState<RunState>(IDLE_STATE);
   const abortController = useRef<AbortController | null>(null);
 
-  const debouncedSchema = useDebounced(draft.schema, 300);
-  const debouncedMaxScoreLevels = useDebounced(draft.settings.maxScoreLevels, 300);
   const effectiveSettings = useMemo(() => {
     const provider = draft.settings.provider || String(serverDefaults.provider ?? "");
     // The server's model and base URL belong to its own provider (see resolve).
@@ -50,8 +48,15 @@ export default function App() {
       maxScoreLevels: draft.settings.maxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? ""),
     };
   }, [draft.settings, serverDefaults]);
-  const lintMaxScoreLevels =
-    debouncedMaxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? "");
+  const request = useMemo(
+    () => buildAskRequest({ ...draft, settings: effectiveSettings }),
+    [draft, effectiveSettings],
+  );
+  // Lint re-runs only when the schema, provider or max score levels change.
+  const [lintJSON, lintError] = useDebounced<[string | null, string | null]>(
+    request.ok ? [JSON.stringify(lintBody(request.body)), null] : [null, request.error],
+    300,
+  );
 
   // Server defaults for ghost text; no api-key by design.
   useEffect(() => {
@@ -71,26 +76,22 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  const runLint = useCallback(async (schema: string, provider: string, maxScoreLevels: string) => {
+  const runLint = useCallback(async (body: string) => {
     setLinting(true);
-    const result = await lintSchema(schema, provider, maxScoreLevels);
+    const result = await lintSchema(body);
     setLintResult(result);
     setLinting(false);
   }, []);
 
   useEffect(() => {
-    void runLint(debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels);
-  }, [debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels, runLint]);
+    if (lintJSON !== null) void runLint(lintJSON);
+  }, [lintJSON, runLint]);
+  const lint: LintResult | null =
+    lintError !== null ? { valid: false, errors: [lintError], warnings: [] } : lintResult;
 
-  const requestPreview = useMemo(() => {
-    try {
-      return JSON.stringify(buildBody(draft.parts, draft.system, draft.schema, effectiveSettings), null, 2);
-    } catch {
-      return "{}";
-    }
-  }, [draft, effectiveSettings]);
+  const requestPreview = request.ok ? request.json : "{}";
 
-  const lintErrors = lintResult && !linting ? lintResult.errors : [];
+  const lintErrors = lint && !linting ? lint.errors : [];
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
   const jevjam = effectiveSettings.provider === "jevjam";
@@ -100,19 +101,17 @@ export default function App() {
     !!baseURL &&
     draft.parts.length > 0 &&
     lintErrors.length === 0 &&
-    !!draft.schema.trim() &&
+    request.ok &&
     !!draft.parts.some((p) =>
       p.kind === "text" ? (p.text ?? "").trim() : (p.image ?? p.pdf ?? "").trim(),
     );
 
   const runRequest = async () => {
-    let body: unknown;
-    try {
-      body = buildBody(draft.parts, draft.system, draft.schema, effectiveSettings);
-    } catch (err) {
-      setRun({ ...IDLE_STATE, error: `schema is not valid JSON: ${err instanceof Error ? err.message : err}` });
+    if (!request.ok) {
+      setRun({ ...IDLE_STATE, error: request.error });
       return;
     }
+    const { body } = request;
     const startedAt = Date.now();
     const controller = new AbortController();
     abortController.current = controller;
@@ -122,7 +121,7 @@ export default function App() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // jevjam's raw answers come wrapped with the result in the body.
-        body: JSON.stringify(jevjam ? { ...(body as object), answers: true } : body),
+        body: JSON.stringify(jevjam ? { ...body, answers: true } : body),
         signal: controller.signal,
       });
       const latencyHeader = res.headers.get("X-Latency-Ms");
@@ -149,7 +148,7 @@ export default function App() {
         status: res.status,
         latencyMs,
         model: model || "server default",
-        request: body,
+        draft,
         response: safeParse(text),
         responseText: text,
         error: res.ok ? null : text,
@@ -174,7 +173,7 @@ export default function App() {
         status: null,
         latencyMs: null,
         model: model || "server default",
-        request: body,
+        draft,
         response: null,
         responseText: "",
         error: message,
@@ -184,36 +183,14 @@ export default function App() {
     }
   };
 
-  const restore = (record: RunRecord) => {
-    const req = record.request as Record<string, unknown>;
-    const settings: Settings = {
-      ...draft.settings,
-      provider: (req.provider as string) ?? "",
-      maxScoreLevels: req["max-score-levels"] !== undefined ? String(req["max-score-levels"]) : "",
-      model: (req.model as string) ?? "",
-      baseURL: (req["base-url"] as string) ?? "",
-      apiKey: (req["api-key"] as string) ?? "",
-      reasoningEffort: (req["reasoning-effort"] as string) ?? "",
-      temperatureEnabled: req.temperature !== undefined,
-      temperature: req.temperature !== undefined ? String(req.temperature) : draft.settings.temperature,
-      maxTokensEnabled: req["max-tokens"] !== undefined,
-      maxTokens: req["max-tokens"] !== undefined ? String(req["max-tokens"]) : draft.settings.maxTokens,
-      timeout: (req.timeout as string) ?? "",
-    };
-    setDraft({
-      settings,
-      system: (req.system as string) ?? "",
-      parts: normalizeParts(req.parts),
-      schema: JSON.stringify(req.schema, null, 2),
-    });
-  };
+  const restore = (record: RunRecord) => setDraft(record.draft);
 
   return (
     <div className="flex h-screen flex-col bg-muted/30">
       <Header
         canRun={canRun}
         running={run.running}
-        lintIssues={lintIssuesCount(lintResult, linting)}
+        lintIssues={lintIssuesCount(lint, linting)}
         onRun={runRequest}
         onStop={() => abortController.current?.abort()}
       />
@@ -264,10 +241,9 @@ export default function App() {
             </CardHeader>
             <CardContent>
               <PartsEditor
-                system={jevjam ? "" : draft.system}
                 parts={draft.parts}
                 onPartsChange={(parts) => setDraft({ ...draft, parts })}
-                schemaText={draft.schema}
+                bytes={request.ok ? request.bytes : null}
               />
             </CardContent>
           </Card>
@@ -280,7 +256,7 @@ export default function App() {
               <SchemaPanel
                 schema={draft.schema}
                 onSchemaChange={(schema) => setDraft({ ...draft, schema })}
-                lint={lintResult}
+                lint={lint}
                 linting={linting}
               />
             </CardContent>
@@ -300,12 +276,7 @@ export default function App() {
                   <ResponsePanel state={run} />
                 </TabsContent>
                 <TabsContent value="codegen" className="flex flex-col">
-                  <CodegenPanel
-                    parts={draft.parts}
-                    system={draft.system}
-                    schema={draft.schema}
-                    settings={effectiveSettings}
-                  />
+                  <CodegenPanel request={request} parts={draft.parts} schema={draft.schema} />
                 </TabsContent>
                 <TabsContent value="history">
                   <HistoryPanel history={history} onRestore={restore} onClear={clear} />
@@ -366,24 +337,6 @@ function safeParse(text: string): unknown {
   } catch {
     return text;
   }
-}
-
-function normalizeParts(raw: unknown): Part[] {
-  if (!Array.isArray(raw)) return [{ kind: "text", text: "" }];
-  const parts: Part[] = raw.map((p) => {
-    const part = p as Record<string, unknown>;
-    if (part.pdf !== undefined) return { kind: "pdf", pdf: String(part.pdf) };
-    if (part.image !== undefined) {
-      const isURL = /^https?:\/\//.test(String(part.image));
-      return {
-        kind: "image",
-        source: isURL ? "url" : "upload",
-        image: String(part.image),
-      };
-    }
-    return { kind: "text", text: String(part.text ?? "") };
-  });
-  return parts.length ? parts : [{ kind: "text", text: "" }];
 }
 
 function prettyDuration(d: string): string {

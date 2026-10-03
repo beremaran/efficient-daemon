@@ -40,7 +40,8 @@ export interface RunRecord {
   status: number | null;
   latencyMs: number | null;
   model: string;
-  request: unknown;
+  /** The raw Draft that ran; restore puts it back as-is. */
+  draft: Draft;
   response: unknown;
   responseText: string;
   error: string | null;
@@ -61,8 +62,6 @@ export const REASONING_EFFORTS = [
 // Keep in sync with internal/server (maxBodyBytes) and internal/message.
 export const MAX_BODY_BYTES = 30 << 20; // 30 MiB request body cap
 export const MAX_IMAGE_BYTES = 20 << 20; // 20 MiB per image file
-// Base64 encodes 3 bytes into 4 chars.
-export const BASE64_INFLATION = 4 / 3;
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: "",

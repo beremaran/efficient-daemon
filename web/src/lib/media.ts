@@ -1,12 +1,7 @@
 // File → base64 helpers and the client-side payload guards agreed in design:
-// 20 MiB per image, base64-inflated total measured against the 30 MiB body cap.
+// 20 MiB per image; the Ask request's size is measured against the 30 MiB body cap.
 
-import {
-  BASE64_INFLATION,
-  MAX_BODY_BYTES,
-  MAX_IMAGE_BYTES,
-  type Part,
-} from "@/lib/types";
+import { MAX_BODY_BYTES, MAX_IMAGE_BYTES } from "@/lib/types";
 
 /** Reads a File as base64 (without the data: prefix). */
 export function fileToBase64(file: File): Promise<string> {
@@ -20,27 +15,6 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("read failed"));
     reader.readAsDataURL(file);
   });
-}
-
-/** Serialized size of one media value once inside the JSON body. */
-function partBytes(part: Part): number {
-  let media = "";
-  if (part.kind === "image") media = part.image ?? "";
-  if (part.kind === "pdf") media = part.pdf ?? "";
-  if (part.source === "url") return new Blob([media]).size;
-  return new Blob([media]).size * BASE64_INFLATION;
-}
-
-/** Approximate POST /ask body size for the current draft. */
-export function estimateBodyBytes(parts: Part[], schema: string, system: string): number {
-  let total = 500; // envelope, settings fields, headroom
-  for (const part of parts) {
-    if (part.kind === "text") total += new Blob([part.text ?? ""]).size + 40;
-    else total += partBytes(part) + 80;
-  }
-  total += new Blob([system]).size;
-  total += new Blob([schema]).size;
-  return total;
 }
 
 export interface PartGuardResult {

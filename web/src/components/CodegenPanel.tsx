@@ -10,7 +10,8 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { elideBase64, generateSnippets } from "@/lib/codegen";
 import { copyText } from "@/lib/store";
-import type { Part, Settings } from "@/lib/types";
+import type { AskRequest } from "@/lib/ask";
+import type { Part } from "@/lib/types";
 
 const LANGS = ["cli", "curl", "python", "javascript", "go"] as const;
 type Lang = (typeof LANGS)[number];
@@ -28,26 +29,21 @@ function prettyLabel(lang: Lang): string {
 }
 
 export function CodegenPanel({
+  request,
   parts,
-  system,
   schema,
-  settings,
 }: {
+  request: AskRequest;
   parts: Part[];
-  system: string;
   schema: string;
-  settings: Settings;
 }) {
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState(false);
 
-  const snippets = useMemo(() => {
-    try {
-      return generateSnippets(parts, system, schema, settings, window.location.origin);
-    } catch {
-      return [];
-    }
-  }, [parts, system, schema, settings]);
+  const snippets = useMemo(
+    () => (request.ok ? generateSnippets(request, parts, schema, window.location.origin) : []),
+    [request, parts, schema],
+  );
 
   const current = snippets.find((s) => s.label === prettyLabel(lang)) ?? snippets[0];
   const display = current ? elideBase64(current.code) : "Fix the response schema to generate code.";

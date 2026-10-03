@@ -8,20 +8,19 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { checkImageFile, estimateBodyBytes, fileToBase64, MAX_BODY_MB } from "@/lib/media";
+import { checkImageFile, fileToBase64, MAX_BODY_MB } from "@/lib/media";
 import { MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function PartsEditor({
-  system,
   parts,
   onPartsChange,
-  schemaText,
+  bytes,
 }: {
-  system: string;
   parts: Part[];
   onPartsChange: (next: Part[]) => void;
-  schemaText: string;
+  /** Size of the Ask request; null while it can't be built. */
+  bytes: number | null;
 }) {
   const setPart = (index: number, patch: Partial<Part>) => {
     const next = [...parts];
@@ -45,8 +44,6 @@ export function PartsEditor({
     onPartsChange(next);
   };
 
-  const totalBytes = estimateBodyBytes(parts, system, schemaText);
-
   return (
     <div className="flex flex-col gap-2">
       {parts.map((part, i) => (
@@ -61,7 +58,7 @@ export function PartsEditor({
         />
       ))}
 
-      <PayloadMeter totalBytes={totalBytes} />
+      {bytes !== null && <PayloadMeter totalBytes={bytes} />}
 
       <div className="flex items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => addPart("text")}>

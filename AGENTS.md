@@ -17,6 +17,7 @@ User guides live in `docs/`; keep `README.md` short and link to them.
 
 - `make build` builds `bin/efficient-daemon`.
 - `make test` runs all Go tests; use `go test -run TestName ./...` for a focused test.
+- `make test-web` (or `cd web && npm test`) runs the workbench's Vitest tests.
 - `make vet` runs `go vet ./...`; `make fmt` applies `gofmt` to Go sources.
 - `make build-web` runs `npm ci` and builds `web/` into the embedded `dist/` directory. Run it after changing the workbench.
 - `make dev-web` starts Vite. Run `efficient-daemon serve --workbench` on `:8080` so the dev proxy can reach the API.
@@ -33,8 +34,9 @@ double-quoted, semicolon-terminated style and uses the `@/` alias for `web/src`.
 
 Use Go's standard `testing` package with `TestXxx` names and colocated
 `*_test.go` files. Keep tests hermetic; existing end-to-end coverage uses
-`httptest` rather than live APIs. No coverage threshold or frontend test
-framework is configured, so add focused tests for behavior that warrants them.
+`httptest` rather than live APIs. Workbench tests use Vitest, colocated as
+`web/src/**/*.test.ts`. No coverage threshold is configured, so add focused
+tests for behavior that warrants them.
 
 ## Commits and Pull Requests
 

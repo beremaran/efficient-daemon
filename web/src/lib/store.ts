@@ -6,7 +6,7 @@ import {
 } from "@/lib/types";
 
 const DRAFT_KEY = "efficient-daemon.draft.v1";
-const HISTORY_KEY = "efficient-daemon.history.v1";
+const HISTORY_KEY = "efficient-daemon.history.v2";
 const MAX_HISTORY = 20;
 
 export function loadDraft(): Draft {
@@ -39,6 +39,8 @@ export function useDraft() {
 
 export function loadHistory(): RunRecord[] {
   try {
+    // v1 records held the request body, not the Draft; drop them.
+    localStorage.removeItem("efficient-daemon.history.v1");
     const raw = localStorage.getItem(HISTORY_KEY);
     return raw ? (JSON.parse(raw) as RunRecord[]) : [];
   } catch {
