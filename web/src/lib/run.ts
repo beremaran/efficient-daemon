@@ -1,6 +1,6 @@
 // Why Run is disabled: the first reason, or null when Run can go.
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { keymap, Prec, type Extension } from "@uiw/react-codemirror";
 import type { RunState } from "@/components/ResponsePanel";
 import type { AskRequest } from "@/lib/ask";
@@ -65,6 +65,15 @@ export const stoppedState = (prev: RunState, elapsedMs: number): RunState => ({
 
 export const stoppedLabel = (elapsedMs: number) => `Stopped after ${(elapsedMs / 1000).toFixed(1)} s`;
 
+// Calls `onTick` with the ms elapsed every second; returns a function that stops it.
+export function startElapsed(onTick: (elapsedMs: number) => void): () => void {
+  const startedAt = Date.now();
+  const id = setInterval(() => onTick(Date.now() - startedAt), 1000);
+  return () => clearInterval(id);
+}
+
+export const elapsedLabel = (elapsedMs: number) => `${Math.floor(elapsedMs / 1000)} s`;
+
 export const runShortcutHint = (mac: boolean) => (mac ? "⌘↵" : "Ctrl+Enter");
 
 // Beats the default Mod-Enter (insert blank line), so the shortcut runs from inside editors too.
@@ -79,4 +88,11 @@ export function useRunKeys(run: () => void): Extension {
   });
   // oxlint-disable-next-line react/refs -- read on a key press, not during render
   return useMemo(() => runKeymap(() => latest.current()), []);
+}
+
+// Shows seconds since mount; render it only while a run is in progress.
+export function useElapsed(): number {
+  const [elapsedMs, setElapsedMs] = useState(0);
+  useEffect(() => startElapsed(setElapsedMs), []);
+  return elapsedMs;
 }

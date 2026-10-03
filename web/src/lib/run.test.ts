@@ -1,9 +1,9 @@
 import { EditorState, keymap } from "@uiw/react-codemirror";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
 import type { RunState } from "@/components/ResponsePanel";
-import { connectionMissing, isRunShortcut, runBlocker, runKeymap, runShortcutHint, stoppedLabel, stoppedState, type KeyInfo, type RunInput } from "@/lib/run";
+import { connectionMissing, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -151,5 +151,25 @@ describe("stoppedState", () => {
 
   it("labels the time in seconds", () => {
     expect(stoppedLabel(2500)).toBe("Stopped after 2.5 s");
+  });
+});
+
+describe("startElapsed", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("reports elapsed time each second until stopped", () => {
+    vi.useFakeTimers();
+    const ticks: number[] = [];
+    const stop = startElapsed((ms) => ticks.push(ms));
+    vi.advanceTimersByTime(3000);
+    expect(ticks).toEqual([1000, 2000, 3000]);
+    stop();
+    vi.advanceTimersByTime(5000);
+    expect(ticks).toHaveLength(3);
+  });
+
+  it("labels whole seconds", () => {
+    expect(elapsedLabel(0)).toBe("0 s");
+    expect(elapsedLabel(3999)).toBe("3 s");
   });
 });
