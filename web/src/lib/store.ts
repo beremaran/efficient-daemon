@@ -4,6 +4,7 @@ import {
   type Draft,
   type RunRecord,
 } from "@/lib/types";
+import { stripFileData } from "@/lib/history";
 
 const DRAFT_KEY = "efficient-daemon.draft.v1";
 const HISTORY_KEY = "efficient-daemon.history.v2";
@@ -53,7 +54,7 @@ export function useHistory() {
 
   const push = useCallback((record: RunRecord) => {
     setHistory((prev) => {
-      const next = [record, ...prev].slice(0, MAX_HISTORY);
+      const next = [{ ...record, draft: stripFileData(record.draft) }, ...prev].slice(0, MAX_HISTORY);
       try {
         localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
       } catch {

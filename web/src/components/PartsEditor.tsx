@@ -1,6 +1,7 @@
 import { useRef } from "react";
 import { ArrowDown, ArrowUp, FileText, Image as ImageIcon, Plus, Trash2, Type } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { filesToPick } from "@/lib/history";
 import { checkImageFile, fileToBase64, MAX_BODY_MB } from "@/lib/media";
-import { MAX_BODY_BYTES, type Part } from "@/lib/types";
+import { EMPTY_DRAFT, MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 export function PartsEditor({
@@ -44,8 +46,16 @@ export function PartsEditor({
     onPartsChange(next);
   };
 
+  const toPick = filesToPick({ ...EMPTY_DRAFT, parts });
+
   return (
     <div className="flex flex-col gap-2">
+      {toPick.length > 0 && (
+        <Alert>
+          <AlertTitle>Pick these files again</AlertTitle>
+          <AlertDescription>History keeps file names, not file data: {toPick.join(", ")}</AlertDescription>
+        </Alert>
+      )}
       {parts.map((part, i) => (
         <PartEditor
           key={i}
