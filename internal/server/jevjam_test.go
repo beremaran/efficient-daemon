@@ -47,6 +47,21 @@ func TestAskJevjamEndToEnd(t *testing.T) {
 	}
 }
 
+func TestAskJevjamKeepsEnvKeyFromRequestHosts(t *testing.T) {
+	t.Setenv("JEVJAM_API_KEY", "secret")
+	var auth string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
+		_, _ = io.WriteString(w, `{"answers":{"mood":{"choice":"bar"},"leave":{"noul":0.9}}}`)
+	}))
+	defer upstream.Close()
+	h := newTestHandler(t, "http://openai.example")
+	rec := postAsk(t, h, `{"provider":"jevjam","base-url":"`+upstream.URL+`","schema":`+jevjamSchema+`,"parts":[{"text":"x"}]}`)
+	if rec.Code != http.StatusOK || auth != "" {
+		t.Errorf("status = %d, Authorization = %q", rec.Code, auth)
+	}
+}
+
 func TestAskJevjamRejectsBadRequests(t *testing.T) {
 	h := newTestHandler(t, "http://upstream.example")
 	tests := map[string]string{

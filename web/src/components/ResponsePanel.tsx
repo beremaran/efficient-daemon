@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { useState } from "react";
 import { copyText } from "@/lib/store";
 
 export interface RunState {
@@ -22,6 +23,7 @@ export interface RunState {
 
 export function ResponsePanel({ state }: { state: RunState }) {
   const { running, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
+  const [tab, setTab] = useState("response");
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
@@ -62,7 +64,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
 
       <Separator />
 
-      <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col gap-3">
+      <Tabs value={tab === "answers" && !answers ? "response" : tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-3">
         <TabsList className="self-end">
           <TabsTrigger value="response">Response</TabsTrigger>
           {answers && <TabsTrigger value="answers">Answers</TabsTrigger>}

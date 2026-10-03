@@ -77,6 +77,19 @@ func TestNewPlanIntegerEnum(t *testing.T) {
 	}
 }
 
+func TestNewPlanAcceptsIntegralNumbers(t *testing.T) {
+	plan, err := NewPlan([]byte(`{"type": "object", "properties": {"a": {"type": "integer", "minimum": 1.0, "maximum": 3e0}, "b": {"type": "integer", "enum": [1.0, 2e0]}}}`), DefaultMaxScoreLevels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan["a"].levels; !reflect.DeepEqual(got, []int64{1, 2, 3}) {
+		t.Errorf("levels = %v", got)
+	}
+	if _, err := NewPlan([]byte(`{"type": "object", "properties": {"a": {"type": "integer", "minimum": 1.5, "maximum": 3}}}`), DefaultMaxScoreLevels); err == nil {
+		t.Error("1.5 should not pass as a whole number")
+	}
+}
+
 func TestNewPlanBoundsMaxLevels(t *testing.T) {
 	raw := []byte(`{"type": "object", "properties": {"a": {"type": "integer", "minimum": 0, "maximum": 9999999}}}`)
 	for _, n := range []int{-5, 1, MaxScoreLevelsLimit + 1, 1 << 30} {
@@ -95,6 +108,8 @@ func TestValuesRejectsMissingAnswers(t *testing.T) {
 		`{"churn": {}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": {"score": 0}, "size": {"probabilities": {"0": 1, "1": 0, "2": 0}}}`,
 		`{"churn": {"noul": 0}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": null, "size": {"probabilities": {"0": 1, "1": 0, "2": 0}}}`,
 		`{"churn": {"noul": 0}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": {"score": 0}, "size": {"score": 0}}`,
+		`{"churn": {"noul": 0}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": {"score": 0}, "size": {"probabilities": {"wrong": 0.1, "keys": 0.8, "2": 0.1}}}`,
+		`{"churn": {"noul": 0}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": {"score": 0}, "size": {"probabilities": {"0": null, "1": null, "2": null}}}`,
 	} {
 		var answers map[string]answer
 		if err := json.Unmarshal([]byte(raw), &answers); err != nil {
@@ -179,8 +194,9 @@ func TestAskMapsAnswersBack(t *testing.T) {
 	}
 }
 
-func TestAskSendsJevjamKey(t *testing.T) {
-	t.Setenv("JEVJAM_API_KEY", "jevjam-secret")
+func TestAskSendsOnlyConfiguredKey(t *testing.T) {
+	// The env key is the CLI's concern; Ask must not leak it to any host.
+	t.Setenv("JEVJAM_API_KEY", "env-secret")
 	var auth string
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		auth = r.Header.Get("Authorization")
@@ -188,11 +204,12 @@ func TestAskSendsJevjamKey(t *testing.T) {
 	}))
 	defer server.Close()
 	plan, _ := NewPlan([]byte(`{"type": "object", "properties": {"churn": {"type": "boolean"}}}`), DefaultMaxScoreLevels)
-	if _, _, err := Ask(context.Background(), Config{BaseURL: server.URL}, plan, []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")}); err != nil {
-		t.Fatal(err)
+	messages := []openai.ChatCompletionMessageParamUnion{openai.UserMessage("hi")}
+	if _, _, err := Ask(context.Background(), Config{BaseURL: server.URL}, plan, messages); err != nil || auth != "" {
+		t.Errorf("Authorization = %q, err = %v", auth, err)
 	}
-	if auth != "Bearer jevjam-secret" {
-		t.Errorf("Authorization = %q", auth)
+	if _, _, err := Ask(context.Background(), Config{BaseURL: server.URL, APIKey: "jevjam-secret"}, plan, messages); err != nil || auth != "Bearer jevjam-secret" {
+		t.Errorf("Authorization = %q, err = %v", auth, err)
 	}
 }
 

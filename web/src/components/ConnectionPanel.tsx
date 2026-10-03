@@ -66,7 +66,7 @@ export function ConnectionPanel({
         label="Provider"
         value={settings.provider}
         options={PROVIDERS}
-        onChange={(provider) => patch({ provider })}
+        onChange={(provider) => patch({ provider, model: "", baseURL: "", apiKey: "" })}
         serverDefault={serverDefaults.provider ?? ""}
       />
       <TextField
