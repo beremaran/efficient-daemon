@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { buildAskRequest, cliArgs, lintBody } from "@/lib/ask";
+import { askFromDraft, buildAskRequest, cliArgs, lintBody } from "@/lib/ask";
 import { DEFAULT_SETTINGS, EMPTY_DRAFT, type Draft, type Settings } from "@/lib/types";
 
 function draft(settings: Partial<Settings> = {}, rest: Partial<Draft> = {}): Draft {
@@ -108,5 +108,20 @@ describe("lintBody", () => {
       provider: "jevjam",
       "max-score-levels": 8,
     });
+  });
+});
+
+describe("askFromDraft", () => {
+  it("builds from the draft it gets, so Run sends the latest text", () => {
+    const stale = draft({}, { parts: [{ kind: "text", text: "old" }] });
+    const latest = draft({}, { parts: [{ kind: "text", text: "old and new" }] });
+    expect(body(stale).parts).toEqual([{ text: "old" }]);
+    const request = askFromDraft(latest, {});
+    expect(request.ok && request.body.parts).toEqual([{ text: "old and new" }]);
+  });
+
+  it("fills empty settings from server defaults", () => {
+    const request = askFromDraft(draft({ model: "", provider: "" }), { provider: "openai", model: "srv" });
+    expect(request.ok && request.body.model).toBe("srv");
   });
 });

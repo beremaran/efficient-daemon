@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Play, Square } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +12,7 @@ import { SchemaPanel } from "@/components/SchemaPanel";
 import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
-import { buildAskRequest, lintBody } from "@/lib/ask";
+import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintAllowsRun, lintSchema, lintView, type LintResult } from "@/lib/lint";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
@@ -37,21 +37,16 @@ export default function App() {
   const [run, setRun] = useState<RunState>(IDLE_STATE);
   const abortController = useRef<AbortController | null>(null);
 
-  const effectiveSettings = useMemo(() => {
-    const provider = draft.settings.provider || String(serverDefaults.provider ?? "");
-    // The server's model and base URL belong to its own provider (see resolve).
-    const own = provider === serverDefaults.provider;
-    return {
-      ...draft.settings,
-      provider,
-      model: draft.settings.model.trim() || (own ? String(serverDefaults.model ?? "").trim() : ""),
-      baseURL: draft.settings.baseURL.trim() || (own ? String(serverDefaults.baseURL ?? "").trim() : ""),
-      maxScoreLevels: draft.settings.maxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? ""),
-    };
-  }, [draft.settings, serverDefaults]);
+  const effectiveSettings = useMemo(
+    () => resolveSettings(draft.settings, serverDefaults),
+    [draft.settings, serverDefaults],
+  );
+  // Typing in a big Part must not wait on the Ask request, codegen and size
+  // rebuilt from it, so those follow a deferred Draft. Run builds from the live one.
+  const deferredDraft = useDeferredValue(draft);
   const request = useMemo(
-    () => buildAskRequest({ ...draft, settings: effectiveSettings }),
-    [draft, effectiveSettings],
+    () => askFromDraft(deferredDraft, serverDefaults),
+    [deferredDraft, serverDefaults],
   );
   // Lint re-runs only when the schema, provider or max score levels change.
   const lintInput = request.ok ? JSON.stringify(lintBody(request.body)) : null;
@@ -92,8 +87,6 @@ export default function App() {
   const lint: LintResult | null =
     lintError !== null ? { valid: false, errors: [lintError], warnings: [] } : lintResult;
 
-  const requestPreview = request.ok ? request.json : "{}";
-
   // A check is pending from the edit until its result lands, including the debounce wait.
   const checking = linting || (lintInput !== null && lintInput !== lintedBody);
   const lintErrors = lintView(lint, checking).errors;
@@ -112,11 +105,13 @@ export default function App() {
     );
 
   const runRequest = async () => {
-    if (!request.ok) {
-      setRun({ ...IDLE_STATE, error: request.error });
+    const latest = askFromDraft(draft, serverDefaults);
+    if (!latest.ok) {
+      setRun({ ...IDLE_STATE, error: latest.error });
       return;
     }
-    const { body } = request;
+    const { body } = latest;
+    const requestPreview = latest.json;
     const startedAt = Date.now();
     const controller = new AbortController();
     abortController.current = controller;
@@ -145,7 +140,7 @@ export default function App() {
         responseText: text,
         answers,
         error: res.ok ? null : text,
-        requestPreview: requestPreview,
+        requestPreview,
       };
       setRun(state);
       push({
@@ -171,7 +166,7 @@ export default function App() {
         responseText: "",
         answers: null,
         error: message,
-        requestPreview: requestPreview,
+        requestPreview,
       });
       push({
         at: startedAt,
@@ -281,7 +276,7 @@ export default function App() {
                   <ResponsePanel state={run} />
                 </TabsContent>
                 <TabsContent value="codegen" className="flex flex-col">
-                  <CodegenPanel request={request} parts={draft.parts} schema={draft.schema} />
+                  <CodegenPanel request={request} parts={deferredDraft.parts} schema={deferredDraft.schema} />
                 </TabsContent>
                 <TabsContent value="history">
                   <HistoryPanel history={history} onRestore={restore} onClear={clear} />
