@@ -7,10 +7,12 @@ import type { RunRecord } from "@/lib/types";
 
 export function HistoryPanel({
   history,
+  saveFailed = false,
   onRestore,
   onClear,
 }: {
   history: RunRecord[];
+  saveFailed?: boolean;
   onRestore: (record: RunRecord) => void;
   onClear: () => void;
 }) {
@@ -22,6 +24,13 @@ export function HistoryPanel({
           Clear
         </Button>
       </div>
+      {saveFailed && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Browser storage is full or blocked, so this history was not saved. It stays until you close the tab.
+          </AlertDescription>
+        </Alert>
+      )}
       <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-auto pr-1">
         {history.length === 0 && <span className="text-sm text-muted-foreground">Nothing yet.</span>}
         {history.map((record) => (

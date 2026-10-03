@@ -29,7 +29,7 @@ const IDLE_STATE: RunState = {
 
 export default function App() {
   const [draft, setDraft] = useDraft();
-  const { history, push, clear } = useHistory();
+  const { history, saveFailed, push, clear } = useHistory();
   const [serverDefaults, setServerDefaults] = useState<Partial<Settings>>({});
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
   const [linting, setLinting] = useState(false);
@@ -279,7 +279,7 @@ export default function App() {
                   <CodegenPanel request={request} parts={draft.parts} schema={draft.schema} />
                 </TabsContent>
                 <TabsContent value="history">
-                  <HistoryPanel history={history} onRestore={restore} onClear={clear} />
+                  <HistoryPanel history={history} saveFailed={saveFailed} onRestore={restore} onClear={clear} />
                 </TabsContent>
               </CardContent>
             </Card>
