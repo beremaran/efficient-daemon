@@ -1,0 +1,53 @@
+import { describe, expect, it } from "vitest";
+import { movePart, newPart, removePart, withPartIds } from "@/lib/parts";
+import { loadDraft } from "@/lib/store";
+
+const texts = (parts: { text?: string }[]) => parts.map((p) => p.text);
+
+describe("part ids", () => {
+  const parts = [
+    { ...newPart("text"), text: "a" },
+    { ...newPart("text"), text: "b" },
+    { ...newPart("text"), text: "c" },
+  ];
+
+  it("gives each new Part its own id", () => {
+    expect(new Set(parts.map((p) => p.id)).size).toBe(3);
+  });
+
+  it("keeps text with its Part after a move", () => {
+    const moved = movePart(parts, 0, 1);
+    expect(texts(moved)).toEqual(["b", "a", "c"]);
+    expect(moved.map((p) => p.id)).toEqual([parts[1].id, parts[0].id, parts[2].id]);
+  });
+
+  it("ignores a move past either end", () => {
+    expect(movePart(parts, 0, -1)).toBe(parts);
+    expect(movePart(parts, 2, 1)).toBe(parts);
+  });
+
+  it("keeps text with its Part after a remove", () => {
+    const rest = removePart(parts, 1);
+    expect(texts(rest)).toEqual(["a", "c"]);
+    expect(rest.map((p) => p.id)).toEqual([parts[0].id, parts[2].id]);
+  });
+
+  it("adds ids to Parts that lack one and keeps existing ids", () => {
+    const old = [{ kind: "text", text: "x" }, { id: "keep", kind: "text", text: "y" }] as never[];
+    const [a, b] = withPartIds(old);
+    expect(a.id).toBeTruthy();
+    expect(b.id).toBe("keep");
+  });
+});
+
+describe("loadDraft", () => {
+  it("loads a Draft saved without Part ids and gives each Part an id", () => {
+    const saved = { system: "s", parts: [{ kind: "text", text: "a" }, { kind: "pdf", pdf: "QUJD" }] };
+    const store = { getItem: () => JSON.stringify(saved) };
+    globalThis.localStorage = store as unknown as Storage;
+    const { parts } = loadDraft();
+    expect(texts(parts)).toEqual(["a", undefined]);
+    expect(parts.every((p) => p.id)).toBe(true);
+    expect(parts[0].id).not.toBe(parts[1].id);
+  });
+});

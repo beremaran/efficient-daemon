@@ -14,6 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { buildAskRequest, lintBody } from "@/lib/ask";
 import { lintSchema, type LintResult } from "@/lib/lint";
+import { withPartIds } from "@/lib/parts";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -183,7 +184,7 @@ export default function App() {
     }
   };
 
-  const restore = (record: RunRecord) => setDraft(record.draft);
+  const restore = (record: RunRecord) => setDraft({ ...record.draft, parts: withPartIds(record.draft.parts) });
 
   return (
     <div className="flex h-screen flex-col bg-muted/30">

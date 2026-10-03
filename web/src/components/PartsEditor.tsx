@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { checkImageFile, fileToBase64, MAX_BODY_MB } from "@/lib/media";
+import { movePart, newPart, removePart } from "@/lib/parts";
 import { MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -28,33 +29,19 @@ export function PartsEditor({
     onPartsChange(next);
   };
 
-  const addPart = (kind: Part["kind"]) => {
-    if (kind === "text") onPartsChange([...parts, { kind: "text", text: "" }]);
-    else if (kind === "image") onPartsChange([...parts, { kind: "image", source: "url", image: "" }]);
-    else onPartsChange([...parts, { kind: "pdf", pdf: "" }]);
-  };
-
-  const removePart = (index: number) => onPartsChange(parts.filter((_, i) => i !== index));
-
-  const move = (index: number, delta: -1 | 1) => {
-    const target = index + delta;
-    if (target < 0 || target >= parts.length) return;
-    const next = [...parts];
-    [next[index], next[target]] = [next[target], next[index]];
-    onPartsChange(next);
-  };
+  const addPart = (kind: Part["kind"]) => onPartsChange([...parts, newPart(kind)]);
 
   return (
     <div className="flex flex-col gap-2">
       {parts.map((part, i) => (
         <PartEditor
-          key={i}
+          key={part.id}
           index={i}
           part={part}
           count={parts.length}
           onChange={(patch) => setPart(i, patch)}
-          onRemove={() => removePart(i)}
-          onMove={(delta) => move(i, delta)}
+          onRemove={() => onPartsChange(removePart(parts, i))}
+          onMove={(delta) => onPartsChange(movePart(parts, i, delta))}
         />
       ))}
 

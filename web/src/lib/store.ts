@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { withPartIds } from "@/lib/parts";
 import {
   EMPTY_DRAFT,
   type Draft,
@@ -17,7 +18,7 @@ export function loadDraft(): Draft {
     return {
       settings: { ...EMPTY_DRAFT.settings, ...parsed.settings },
       system: parsed.system ?? "",
-      parts: parsed.parts?.length ? parsed.parts : [{ kind: "text", text: "" }],
+      parts: withPartIds(parsed.parts?.length ? parsed.parts : EMPTY_DRAFT.parts),
       schema: parsed.schema ?? EMPTY_DRAFT.schema,
     };
   } catch {
