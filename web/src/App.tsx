@@ -14,7 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
-import { connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
+import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import { errorMessage } from "@/lib/utils";
 import type { RunRecord, Settings } from "@/lib/types";
@@ -242,7 +242,7 @@ export default function App() {
               open={connectionOpen}
               onToggle={(e) => setConnectionOpen(e.currentTarget.open)}
             >
-              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+              <summary className={cardToggleClass}>
                 <CardHeader className="flex-row items-center justify-between pb-4">
                   <CardTitle className="text-sm">Connection & sampling</CardTitle>
                   <span className="ml-auto truncate text-xs text-muted-foreground group-open:hidden">
@@ -264,7 +264,7 @@ export default function App() {
           {!jevjam && (
             <Card>
               <details className="group">
-                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <summary className={cardToggleClass}>
                   <CardHeader className="flex-row items-center justify-between pb-4">
                     <CardTitle className="text-sm">System message</CardTitle>
                     <span className="ml-auto text-xs text-muted-foreground group-open:hidden">{systemSummary(draft.system)}</span>

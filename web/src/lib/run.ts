@@ -103,3 +103,7 @@ export function useElapsed(): number {
   useEffect(() => startElapsed(setElapsedMs), []);
   return elapsedMs;
 }
+
+/** Classes for the `summary` of a card you open and close; it shows a ring on keyboard focus. */
+export const cardToggleClass =
+  "cursor-pointer list-none rounded-xl focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-ring [&::-webkit-details-marker]:hidden";

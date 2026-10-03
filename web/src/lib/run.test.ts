@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
 import type { RunState } from "@/components/ResponsePanel";
-import { connectionMissing, connectionSummary, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, systemSummary, type KeyInfo, type RunInput } from "@/lib/run";
+import { cardToggleClass, connectionMissing, connectionSummary, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, systemSummary, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -196,5 +196,11 @@ describe("startElapsed", () => {
   it("labels whole seconds", () => {
     expect(elapsedLabel(0)).toBe("0 s");
     expect(elapsedLabel(3999)).toBe("3 s");
+  });
+});
+
+describe("cardToggleClass", () => {
+  it("shows a ring on keyboard focus", () => {
+    expect(cardToggleClass.split(" ")).toEqual(expect.arrayContaining(["focus-visible:ring-2", "focus-visible:ring-ring"]));
   });
 });
