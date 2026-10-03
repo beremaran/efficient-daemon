@@ -23,6 +23,7 @@ export interface RunState {
 export function ResponsePanel({ state }: { state: RunState }) {
   const { running, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
   const [tab, setTab] = useState("response");
+  const noRunYet = !running && !cancelled && status === null && !responseText && !error;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
@@ -76,16 +77,24 @@ export function ResponsePanel({ state }: { state: RunState }) {
           <TabsTrigger value="request">Request body</TabsTrigger>
         </TabsList>
         <TabsContent value="response" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            <CodeMirror
-              value={responseText || "// run a request to see the response"}
-              height="100%"
-              extensions={[json()]}
-              theme={oneDark}
-              editable={false}
-              className="h-full min-h-0"
-            />
-          </div>
+          {noRunYet ? (
+            <ol className="list-inside list-decimal rounded-md border p-4 text-sm text-muted-foreground">
+              <li>Add a Part: text, an image, or a PDF.</li>
+              <li>Check the schema.</li>
+              <li>Click Run.</li>
+            </ol>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+              <CodeMirror
+                value={responseText}
+                height="100%"
+                extensions={[json()]}
+                theme={oneDark}
+                editable={false}
+                className="h-full min-h-0"
+              />
+            </div>
+          )}
         </TabsContent>
         {answers && (
           <TabsContent value="answers" className="mt-0 min-h-0 flex-1 overflow-auto">

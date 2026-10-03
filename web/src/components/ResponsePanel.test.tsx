@@ -35,3 +35,22 @@ describe("ResponsePanel run badge", () => {
     expect(html).toMatch(new RegExp(`<div role="status"[^>]*>.*${text}`));
   });
 });
+
+describe("ResponsePanel empty state", () => {
+  it("shows the getting-started steps before the first run", () => {
+    const html = renderToStaticMarkup(<ResponsePanel state={base} />);
+    expect(html).toContain("Add a Part");
+    expect(html).toContain("Check the schema");
+    expect(html).toContain("Click Run");
+  });
+
+  it.each([
+    ["running", { ...base, running: true }],
+    ["stopped", { ...base, cancelled: true }],
+    ["done", { ...base, status: 200, responseText: "{}" }],
+    ["failed", { ...base, error: "boom" }],
+  ])("hides the steps once a run is %s", (_, state) => {
+    const html = renderToStaticMarkup(<ResponsePanel state={state} />);
+    expect(html).not.toContain("Add a Part");
+  });
+});
