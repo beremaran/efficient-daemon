@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
-import { loadDraft, loadHistory, loadKeepKey, withoutApiKey } from "@/lib/store";
+import { addToHistory, clearHistory, loadDraft, loadHistory, loadKeepKey, withoutApiKey } from "@/lib/store";
 import { EMPTY_DRAFT, type RunRecord } from "@/lib/types";
 
 function memoryStorage() {
@@ -142,5 +142,52 @@ describe("history v1 migration", () => {
     expect(rec.draft.parts[1].pdf).toBe("");
     expect(localStorage.getItem("efficient-daemon.history.v1")).toBeNull();
     expect(loadHistory()).toHaveLength(1);
+  });
+});
+
+// A v1 history whose migration cannot be written: v2 writes fail until `allow` is called.
+function failedV1Migration() {
+  const storage = memoryStorage();
+  let writable = false;
+  const v1 = { at: 1, status: 200, latencyMs: 5, model: "m", request: { model: "m", parts: [] }, response: null, responseText: "{}", error: null };
+  storage.setItem("efficient-daemon.history.v1", JSON.stringify([v1]));
+  vi.stubGlobal("localStorage", {
+    ...storage,
+    setItem: (k: string, v: string) => {
+      if (!writable) throw new Error("quota");
+      storage.setItem(k, v);
+    },
+  });
+  return { storage, allow: () => void (writable = true) };
+}
+
+describe("addToHistory", () => {
+  it("drops v1 once the saved list holds its records, so a reload does not migrate them twice", () => {
+    const { storage, allow } = failedV1Migration();
+    const loaded = loadHistory();
+    expect(loaded).toHaveLength(1);
+    allow();
+    const { next, saved } = addToHistory(loaded, { ...loaded[0], at: 2 });
+    expect(saved).toBe(true);
+    expect(next).toHaveLength(2);
+    expect(storage.getItem("efficient-daemon.history.v1")).toBeNull();
+    expect(loadHistory().map((r) => r.at)).toEqual([2, 1]);
+  });
+
+  it("keeps v1 when the save fails", () => {
+    const { storage } = failedV1Migration();
+    const loaded = loadHistory();
+    expect(addToHistory(loaded, { ...loaded[0], at: 2 }).saved).toBe(false);
+    expect(storage.getItem("efficient-daemon.history.v1")).not.toBeNull();
+  });
+});
+
+describe("clearHistory", () => {
+  it("removes v1 history kept after a failed migration, so it does not come back", () => {
+    const { storage } = failedV1Migration();
+    expect(loadHistory()).toHaveLength(1);
+    expect(storage.getItem("efficient-daemon.history.v1")).not.toBeNull();
+    clearHistory();
+    expect(loadHistory()).toEqual([]);
   });
 });

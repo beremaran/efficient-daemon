@@ -140,13 +140,7 @@ export function loadHistory(): RunRecord[] {
       // A bad v1 value stays where it is; v2 history still loads.
     }
     // The in-memory records remain useful when storage refuses the write.
-    if ((migrated || JSON.stringify(records) !== raw) && saveHistory(records) && migrated) {
-      try {
-        localStorage.removeItem(HISTORY_V1_KEY);
-      } catch {
-        // ignore
-      }
-    }
+    if ((migrated || JSON.stringify(records) !== raw) && saveHistory(records) && migrated) removeStored(HISTORY_V1_KEY);
     return records;
   } catch {
     return [];
@@ -163,6 +157,33 @@ export function saveHistory(history: RunRecord[]): boolean {
   }
 }
 
+function removeStored(...keys: string[]) {
+  for (const key of keys) {
+    try {
+      localStorage.removeItem(key);
+    } catch {
+      // ignore
+    }
+  }
+}
+
+/**
+ * Adds a run to the front of history and saves it. The list already holds any v1 records
+ * whose migration could not be written, so once it is saved the v1 copy goes too;
+ * left in place, the next load would migrate those records a second time.
+ */
+export function addToHistory(history: RunRecord[], record: RunRecord): { next: RunRecord[]; saved: boolean } {
+  const next = [withoutKey({ ...record, draft: stripFileData(record.draft) }), ...history].slice(0, MAX_HISTORY);
+  const saved = saveHistory(next);
+  if (saved) removeStored(HISTORY_V1_KEY);
+  return { next, saved };
+}
+
+/** Removes stored history, v1 too: a v1 copy kept after a failed migration would bring it back on reload. */
+export function clearHistory() {
+  removeStored(HISTORY_KEY, HISTORY_V1_KEY);
+}
+
 export function useHistory() {
   const [history, setHistory] = useState<RunRecord[]>(loadHistory);
   const [saveFailed, setSaveFailed] = useState(false);
@@ -170,21 +191,17 @@ export function useHistory() {
   const latest = useRef(history);
 
   const push = useCallback((record: RunRecord) => {
-    const next = [withoutKey({ ...record, draft: stripFileData(record.draft) }), ...latest.current].slice(0, MAX_HISTORY);
+    const { next, saved } = addToHistory(latest.current, record);
     latest.current = next;
     setHistory(next);
-    setSaveFailed(!saveHistory(next));
+    setSaveFailed(!saved);
   }, []);
 
   const clear = useCallback(() => {
     latest.current = [];
     setHistory([]);
     setSaveFailed(false);
-    try {
-      localStorage.removeItem(HISTORY_KEY);
-    } catch {
-      // ignore
-    }
+    clearHistory();
   }, []);
 
   return { history, saveFailed, push, clear };
