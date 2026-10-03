@@ -1,6 +1,7 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { promptPreview } from "@/lib/history";
 import { copyText } from "@/lib/store";
 import type { RunRecord } from "@/lib/types";
 
@@ -33,6 +34,7 @@ export function HistoryPanel({
 
 function HistoryRow({ record, onRestore }: { record: RunRecord; onRestore: (r: RunRecord) => void }) {
   const ok = record.error === null && record.status !== null && record.status < 300;
+  const prompt = promptPreview(record.draft);
   return (
     <div className="rounded-md border p-2 text-sm">
       <div className="flex items-center gap-2">
@@ -45,6 +47,7 @@ function HistoryRow({ record, onRestore }: { record: RunRecord; onRestore: (r: R
         >
           {record.status ?? "—"}
         </Badge>
+        <span className="truncate text-xs font-medium">{record.model}</span>
         <span className="text-xs text-muted-foreground">{new Date(record.at).toLocaleTimeString()}</span>
         {record.latencyMs !== null && <span className="text-xs text-muted-foreground">{record.latencyMs} ms</span>}
         <span className="flex-1" />
@@ -55,6 +58,7 @@ function HistoryRow({ record, onRestore }: { record: RunRecord; onRestore: (r: R
           Restore
         </Button>
       </div>
+      {prompt && <p className="mt-2 truncate text-xs text-muted-foreground">{prompt}</p>}
       {record.error && (
         <Alert variant="destructive" className="mt-2">
           <AlertDescription className="break-words font-mono text-xs">{record.error}</AlertDescription>
