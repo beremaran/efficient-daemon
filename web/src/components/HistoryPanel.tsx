@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -19,13 +20,22 @@ export function HistoryPanel({
   onUndo?: () => void;
   onClear: () => void;
 }) {
+  // Undo unmounts when clicked, so focus moves to the run count instead of falling to the page.
+  const count = useRef<HTMLSpanElement>(null);
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-center justify-between">
-        <span className="text-sm text-muted-foreground">{history.length} run{history.length === 1 ? "" : "s"} (newest first)</span>
+        <span ref={count} tabIndex={-1} className="text-sm text-muted-foreground outline-none">{history.length} run{history.length === 1 ? "" : "s"} (newest first)</span>
         <div className="flex items-center gap-1">
           {onUndo && (
-            <Button variant="outline" size="sm" onClick={onUndo}>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                onUndo();
+                count.current?.focus();
+              }}
+            >
               Undo restore
             </Button>
           )}

@@ -129,4 +129,15 @@ describe("Undo restore", () => {
     type(field("textarea"), "typed after the restore");
     expect(button("Undo restore")).toBeUndefined();
   });
+
+  it("keeps focus on the History panel after Undo", async () => {
+    localStorage.setItem("efficient-daemon.history.v2", JSON.stringify([record]));
+    await mount();
+    await act(async () => button("History")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    await act(async () => button("Restore")!.click());
+    await act(async () => button("Undo restore")!.click());
+    expect(button("Undo restore")).toBeUndefined();
+    expect(document.activeElement).not.toBe(document.body);
+    expect(field("textarea").value).toBe("old");
+  });
 });
