@@ -33,4 +33,18 @@ export function checkImageFile(file: File): PartGuardResult {
   return { ok: true };
 }
 
+/** Reads a picked file for a Part; a size or read failure comes back as a message, not a throw. */
+export async function readPartFile(
+  file: File,
+  enforceImageCap?: boolean,
+): Promise<{ base64: string } | { message: string }> {
+  const guard = enforceImageCap ? checkImageFile(file) : { ok: true, message: undefined };
+  if (!guard.ok) return { message: guard.message as string };
+  try {
+    return { base64: await fileToBase64(file) };
+  } catch {
+    return { message: `Could not read ${file.name}` };
+  }
+}
+
 export const MAX_BODY_MB = Math.floor(MAX_BODY_BYTES / (1 << 20));

@@ -8,7 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
-import { checkImageFile, fileToBase64, MAX_BODY_MB } from "@/lib/media";
+import { MAX_BODY_MB, readPartFile } from "@/lib/media";
 import { movePart, newPart, removePart } from "@/lib/parts";
 import { MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -252,15 +252,12 @@ function FileInput({
         onChange={async (e) => {
           const file = e.target.files?.[0];
           if (!file) return;
-          const guard = enforceImageCap ? checkImageFile(file) : { ok: true };
-          if (!guard.ok) {
-            onError(guard.message);
-            e.target.value = "";
-            return;
+          const result = await readPartFile(file, enforceImageCap);
+          if ("message" in result) onError(result.message);
+          else {
+            onError();
+            onFile(result.base64, file.name);
           }
-          const b64 = await fileToBase64(file);
-          onError();
-          onFile(b64, file.name);
           e.target.value = "";
         }}
       />
