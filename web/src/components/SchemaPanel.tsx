@@ -9,7 +9,6 @@ import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { LintStatus } from "@/components/LintStatus";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { lintView, type LintResult } from "@/lib/lint";
 
 // json_typegen_wasm: the same engine transform.tools uses for
@@ -145,7 +144,7 @@ export function SchemaPanel({
       </TabsContent>
 
       {lint && (lint.errors.length > 0 || lint.warnings.length > 0) && (
-        <div className={cn("mt-2 flex flex-col gap-2", stale && "opacity-60")}>
+        <div aria-busy={stale} className="mt-2 flex flex-col gap-2">
           {lint.errors.map((e, i) => (
             <Alert key={`e${i}`} variant="destructive">
               <AlertTitle>Schema error</AlertTitle>
