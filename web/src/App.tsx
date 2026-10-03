@@ -250,7 +250,7 @@ export default function App() {
         canRun={canRun}
         running={run.running}
         blocker={blocker}
-        lintIssues={checking ? 0 : (lint?.errors.length ?? 0)}
+        lintIssues={lintErrors.length}
         onRun={runRequest}
         onStop={() => abortController.current?.abort()}
       />
