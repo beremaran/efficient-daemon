@@ -220,11 +220,11 @@ export function PartEditor({
     const { current: now } = current;
     onChange(kind === "image" && now.source === "url" ? { ...switchImageSource(now, "upload"), ...loaded } : loaded);
   };
-  // Only the newest read of this Part may apply its result.
+  // Only the newest read of this Part, picked, dropped or pasted, may apply its result.
   const readSeq = useRef(0);
-  const load = async (kind: "image" | "pdf", file: File) => {
+  const load = async (kind: "image" | "pdf", file: File, picked = false) => {
     const seq = ++readSeq.current;
-    const result = await readDroppedFile(kind, file);
+    const result = await (picked ? readPartFile(file, kind === "image") : readDroppedFile(kind, file));
     if (seq !== readSeq.current) return;
     if ("message" in result) return onError(result.message);
     onError();
@@ -288,8 +288,8 @@ export function PartEditor({
             autoFocus={autoFocus}
           />
         )}
-        {part.kind === "image" && <ImagePartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} onFile={(b64, name) => place("image", b64, name)} />}
-        {part.kind === "pdf" && <PdfPartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} />}
+        {part.kind === "image" && <ImagePartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} onPick={(file) => void load("image", file, true)} />}
+        {part.kind === "pdf" && <PdfPartEditor part={part} error={error} autoFocus={autoFocus} onPick={(file) => void load("pdf", file, true)} />}
       </CardContent>
     </Card>
   );
@@ -301,14 +301,14 @@ function ImagePartEditor({
   autoFocus,
   onError,
   onChange,
-  onFile,
+  onPick,
 }: {
   part: Part;
   error?: string;
   autoFocus?: boolean;
   onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
-  onFile: (base64: string, name: string) => void;
+  onPick: (file: File) => void;
 }) {
   const source = part.source === "url" ? "url" : "upload";
   return (
@@ -334,14 +334,7 @@ function ImagePartEditor({
         />
       </TabsContent>
       <TabsContent value="upload" className="flex flex-col gap-2">
-        <FileInput
-          accept="image/*"
-          enforceImageCap
-          fileName={part.fileName}
-          autoFocus={autoFocus}
-          onError={onError}
-          onFile={onFile}
-        />
+        <FileInput accept="image/*" fileName={part.fileName} autoFocus={autoFocus} onPick={onPick} />
         {part.image && (
           <img
             src={`data:;base64,${part.image}`}
@@ -360,43 +353,29 @@ function PdfPartEditor({
   part,
   error,
   autoFocus,
-  onError,
-  onChange,
+  onPick,
 }: {
   part: Part;
   error?: string;
   autoFocus?: boolean;
-  onError: (message?: string) => void;
-  onChange: (patch: Partial<Part>) => void;
+  onPick: (file: File) => void;
 }) {
-  return (
-    <FileInput
-      accept="application/pdf,.pdf"
-      fileName={part.fileName}
-      error={error}
-      autoFocus={autoFocus}
-      onError={onError}
-      onFile={(pdf, name) => onChange({ pdf, fileName: name })}
-    />
-  );
+  return <FileInput accept="application/pdf,.pdf" fileName={part.fileName} error={error} autoFocus={autoFocus} onPick={onPick} />;
 }
 
 function FileInput({
   accept,
   fileName,
-  enforceImageCap,
   error,
   autoFocus,
-  onError,
-  onFile,
+  onPick,
 }: {
   accept: string;
-  enforceImageCap?: boolean;
   fileName?: string;
   error?: string;
   autoFocus?: boolean;
-  onError: (message?: string) => void;
-  onFile: (base64: string, name: string) => void;
+  /** Gets the picked file; the Part reads it, in order with drops and pastes. */
+  onPick: (file: File) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
@@ -406,16 +385,10 @@ function FileInput({
         type="file"
         accept={accept}
         className="hidden"
-        onChange={async (e) => {
+        onChange={(e) => {
           const file = e.target.files?.[0];
-          if (!file) return;
-          const result = await readPartFile(file, enforceImageCap);
-          if ("message" in result) onError(result.message);
-          else {
-            onError();
-            onFile(result.base64, file.name);
-          }
           e.target.value = "";
+          if (file) onPick(file);
         }}
       />
       <div className="flex items-center gap-2">

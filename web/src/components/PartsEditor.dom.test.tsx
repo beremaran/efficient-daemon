@@ -8,9 +8,11 @@ import { PartsEditor } from "@/components/PartsEditor";
 import { newPart } from "@/lib/parts";
 import type { Part } from "@/lib/types";
 
-// The read of a dropped file ends when the test says so.
-let finishRead: (base64: string) => void;
-let failRead: (message: string) => void;
+// The read of a file ends when the test says so; finishRead and failRead end the latest one.
+type Read = { finish: (base64: string) => void; fail: (message: string) => void };
+let reads: Read[] = [];
+let finishRead: Read["finish"];
+let failRead: Read["fail"];
 vi.mock("@/lib/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/media")>()),
   readDroppedFile: () => pendingRead(),
@@ -20,6 +22,7 @@ function pendingRead() {
   return new Promise((resolve) => {
     finishRead = (base64) => resolve({ base64 });
     failRead = (message) => resolve({ message });
+    reads.push({ finish: finishRead, fail: failRead });
   });
 }
 
@@ -34,6 +37,7 @@ let host: HTMLDivElement;
 let root: Root;
 
 beforeEach(() => {
+  reads = [];
   host = document.body.appendChild(document.createElement("div"));
   root = createRoot(host);
 });
@@ -103,12 +107,18 @@ describe("focus after removing a Part", () => {
   });
 });
 
+const drop = (id: string, name = "cat.png") => {
+  const event = new Event("drop", { bubbles: true, cancelable: true });
+  Object.defineProperty(event, "dataTransfer", { value: { files: [new File(["x"], name)], types: ["Files"] } });
+  act(() => void host.querySelector(`[data-part-id="${id}"]`)!.dispatchEvent(event));
+};
+const pick = (name: string) => {
+  const input = host.querySelector<HTMLInputElement>("input[type=file]")!;
+  Object.defineProperty(input, "files", { value: [new File(["x"], name)], configurable: true });
+  act(() => void input.dispatchEvent(new Event("change", { bubbles: true })));
+};
+
 describe("a file dropped on a Part", () => {
-  const drop = (id: string) => {
-    const event = new Event("drop", { bubbles: true, cancelable: true });
-    Object.defineProperty(event, "dataTransfer", { value: { files: [new File(["x"], "cat.png")], types: ["Files"] } });
-    act(() => void host.querySelector(`[data-part-id="${id}"]`)!.dispatchEvent(event));
-  };
 
   it("does not bring back a Part removed during the read", async () => {
     const [image, other] = [newPart("image"), newPart("text")];
@@ -154,13 +164,41 @@ describe("a file picked for an image Part", () => {
   it("goes to Upload, not over the URL, when the tab changed during the read", async () => {
     const image = { ...newPart("image"), source: "upload" as const };
     mount([image]);
-    const input = host.querySelector<HTMLInputElement>("input[type=file]")!;
-    Object.defineProperty(input, "files", { value: [new File(["x"], "cat.png")] });
-    act(() => void input.dispatchEvent(new Event("change", { bubbles: true })));
+    pick("cat.png");
     const tab = (name: string) => [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent === name)!;
     act(() => void tab("URL").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
     await act(async () => finishRead("AAAA"));
     expect(tab("Upload").getAttribute("aria-selected")).toBe("true");
     expect(host.textContent).toContain("cat.png");
+  });
+});
+
+describe("picked and dropped files on one Part", () => {
+  it.each([
+    ["image", "picked", "dropped"],
+    ["image", "dropped", "picked"],
+    ["pdf", "picked", "dropped"],
+    ["pdf", "dropped", "picked"],
+  ] as const)("keep the newer file on a %s Part, %s then %s, when the older read ends last", async (kind, first, second) => {
+    const part = kind === "image" ? { ...newPart("image"), source: "upload" as const } : newPart("pdf");
+    mount([part]);
+    const ext = kind === "image" ? "png" : "pdf";
+    const add = (how: string, name: string) => (how === "picked" ? pick(name) : drop(part.id, name));
+    add(first, `old.${ext}`);
+    add(second, `new.${ext}`);
+    await act(async () => reads[1].finish("BBBB"));
+    await act(async () => reads[0].finish("AAAA"));
+    expect(host.textContent).toContain(`new.${ext}`);
+    expect(host.textContent).not.toContain(`old.${ext}`);
+  });
+
+  it("ignores an older read's error once a newer read has finished", async () => {
+    const part = newPart("pdf");
+    mount([part]);
+    pick("old.pdf");
+    drop(part.id, "new.pdf");
+    await act(async () => reads[1].finish("BBBB"));
+    await act(async () => reads[0].fail("old read failed"));
+    expect(host.querySelector('[role="alert"]')).toBeNull();
   });
 });
