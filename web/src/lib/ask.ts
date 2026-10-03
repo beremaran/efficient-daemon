@@ -2,6 +2,7 @@
 // and the payload meter all read from one build, so they cannot drift.
 
 import type { Draft, Part, Settings } from "@/lib/types";
+import { maxScoreLevelsError, maxTokensError, temperatureError } from "@/lib/validate";
 
 export type AskBody = Record<string, unknown>;
 
@@ -53,6 +54,10 @@ export function buildAskRequest(draft: Draft): AskRequest {
     if (s.temperatureEnabled && s.temperature.trim()) body.temperature = Number(s.temperature);
     if (s.maxTokensEnabled && s.maxTokens.trim()) body["max-tokens"] = Number(s.maxTokens);
   }
+  const invalid = jevjam
+    ? maxScoreLevelsError(s.maxScoreLevels)
+    : (s.temperatureEnabled && temperatureError(s.temperature)) || (s.maxTokensEnabled && maxTokensError(s.maxTokens));
+  if (invalid) return { ok: false, error: invalid };
   const json = JSON.stringify(body, null, 2);
   return { ok: true, body, json, bytes: new Blob([json]).size };
 }

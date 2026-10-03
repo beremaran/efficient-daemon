@@ -257,7 +257,15 @@ export default function App() {
     const restored = {
       ...record.draft,
       parts: withPartIds(record.draft.parts),
-      settings: { ...record.draft.settings, apiKey: draft.settings.apiKey },
+      // Send the key only to the connection it was typed for.
+      settings: {
+        ...record.draft.settings,
+        apiKey:
+          record.draft.settings.provider === effectiveSettings.provider &&
+          record.draft.settings.baseURL === effectiveSettings.baseURL
+            ? draft.settings.apiKey
+            : "",
+      },
     };
     setUndo({ before: draft, restored });
     setDraft(restored);

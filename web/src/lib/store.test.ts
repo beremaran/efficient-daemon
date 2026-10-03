@@ -122,3 +122,25 @@ describe("API key storage", () => {
     expect(setItem).toHaveBeenCalledOnce();
   });
 });
+
+describe("history v1 migration", () => {
+  it("converts v1 records to Drafts and removes the v1 key", () => {
+    const v1 = {
+      at: 1,
+      status: 200,
+      latencyMs: 5,
+      model: "m",
+      request: { schema: { type: "object" }, model: "m", "api-key": "sk-x", temperature: 0.5, parts: [{ text: "hi" }, { pdf: "AAA" }] },
+      response: null,
+      responseText: "{}",
+      error: null,
+    };
+    localStorage.setItem("efficient-daemon.history.v1", JSON.stringify([v1]));
+    const [rec] = loadHistory();
+    expect(rec.draft.settings).toMatchObject({ model: "m", apiKey: "", temperatureEnabled: true, temperature: "0.5" });
+    expect(rec.draft.parts.map((p) => p.kind)).toEqual(["text", "pdf"]);
+    expect(rec.draft.parts[1].pdf).toBe("");
+    expect(localStorage.getItem("efficient-daemon.history.v1")).toBeNull();
+    expect(loadHistory()).toHaveLength(1);
+  });
+});

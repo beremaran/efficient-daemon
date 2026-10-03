@@ -269,3 +269,13 @@ describe("prettyJson", () => {
     expect(prettyJson("plain text")).toBe("plain text");
   });
 });
+
+describe("invalid number settings", () => {
+  it("fails the build when an enabled value is out of range", () => {
+    const at = (settings: Partial<Draft["settings"]>) =>
+      buildAskRequest({ ...EMPTY_DRAFT, settings: { ...EMPTY_DRAFT.settings, ...settings } });
+    expect(at({ temperatureEnabled: true, temperature: "3" }).ok).toBe(false);
+    expect(at({ maxTokensEnabled: true, maxTokens: "0" }).ok).toBe(false);
+    expect(at({ temperatureEnabled: true, temperature: "1" }).ok).toBe(true);
+  });
+});

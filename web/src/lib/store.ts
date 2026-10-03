@@ -3,6 +3,7 @@ import { withPartIds } from "@/lib/parts";
 import {
   EMPTY_DRAFT,
   type Draft,
+  type Part,
   type RunRecord,
   type Settings,
 } from "@/lib/types";
@@ -83,24 +84,68 @@ export function useDraft() {
 
 const withoutKey = (r: RunRecord): RunRecord => ({ ...r, draft: withoutApiKey(r.draft) });
 
-export function loadHistory(): RunRecord[] {
-  // Removing the legacy key is cleanup only; a read-only store can still have
-  // readable v2 history, so keep this separate from the history read.
-  try {
-    localStorage.removeItem("efficient-daemon.history.v1");
-  } catch {
-    // ignore
-  }
+const HISTORY_V1_KEY = "efficient-daemon.history.v1";
 
+type V1Record = Omit<RunRecord, "draft"> & { request?: Record<string, unknown> };
+
+/** Turns a v1 record, which kept the Ask request body, into a Draft-backed record. */
+function fromV1({ request: body = {}, ...rest }: V1Record): RunRecord {
+  const str = (k: string) => (typeof body[k] === "string" ? (body[k] as string) : "");
+  const num = (k: string) => (body[k] == null ? "" : String(body[k]));
+  const parts = ((body.parts as Record<string, string>[] | undefined) ?? []).map((p): Part =>
+    "image" in p
+      ? { id: "", kind: "image", image: p.image, source: /^https?:/.test(p.image) ? "url" : "upload" }
+      : "pdf" in p
+        ? { id: "", kind: "pdf", pdf: p.pdf }
+        : { id: "", kind: "text", text: p.text ?? "" },
+  );
+  return {
+    ...rest,
+    draft: stripFileData({
+      settings: {
+        ...EMPTY_DRAFT.settings,
+        provider: str("provider"),
+        model: str("model"),
+        baseURL: str("base-url"),
+        reasoningEffort: str("reasoning-effort"),
+        temperatureEnabled: body.temperature != null,
+        temperature: num("temperature"),
+        maxTokensEnabled: body["max-tokens"] != null,
+        maxTokens: num("max-tokens"),
+        timeout: str("timeout"),
+        maxScoreLevels: num("max-score-levels"),
+      },
+      system: str("system"),
+      parts: withPartIds(parts),
+      schema: JSON.stringify(body.schema ?? "", null, 2),
+    }),
+  };
+}
+
+export function loadHistory(): RunRecord[] {
   try {
     const raw = localStorage.getItem(HISTORY_KEY);
-    if (!raw) return [];
     // Older records kept the API key with the Draft; drop it, in storage too.
-    const records = (JSON.parse(raw) as RunRecord[]).map(withoutKey);
-    if (JSON.stringify(records) !== raw) {
-      // The in-memory sanitized records remain useful when localStorage is
-      // readable but refuses the migration write.
-      saveHistory(records);
+    const records = (raw ? (JSON.parse(raw) as RunRecord[]) : []).map(withoutKey);
+    let migrated = false;
+    try {
+      const v1 = localStorage.getItem(HISTORY_V1_KEY);
+      if (v1) {
+        records.push(...(JSON.parse(v1) as V1Record[]).map(fromV1));
+        records.sort((a, b) => b.at - a.at);
+        records.length = Math.min(records.length, MAX_HISTORY);
+        migrated = true;
+      }
+    } catch {
+      // A bad v1 value stays where it is; v2 history still loads.
+    }
+    // The in-memory records remain useful when storage refuses the write.
+    if ((migrated || JSON.stringify(records) !== raw) && saveHistory(records) && migrated) {
+      try {
+        localStorage.removeItem(HISTORY_V1_KEY);
+      } catch {
+        // ignore
+      }
     }
     return records;
   } catch {

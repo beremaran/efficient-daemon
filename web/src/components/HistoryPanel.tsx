@@ -47,7 +47,7 @@ export function HistoryPanel({
       {saveFailed && (
         <Alert variant="destructive">
           <AlertDescription>
-            Browser storage is full or blocked, so this history was not saved. It stays until you close the tab.
+            Browser storage is full or blocked, so this history was not saved. It stays only until you reload or close the tab.
           </AlertDescription>
         </Alert>
       )}

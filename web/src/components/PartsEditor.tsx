@@ -40,9 +40,15 @@ export function PartsEditor({
   useEffect(() => {
     latest.current = { parts, onPartsChange };
   });
+  // The list this editor last sent up; any other list came from outside, e.g. a History restore.
+  const sent = useRef(parts);
+  const emit = (next: Part[]) => {
+    sent.current = next;
+    latest.current.onPartsChange(next);
+  };
   const change = (next: Part[]) => {
     setFocusId(undefined);
-    latest.current.onPartsChange(next);
+    emit(next);
   };
 
   // Where focus goes after a remove or Undo: a Part id, or the add buttons when `id` is unset.
@@ -66,6 +72,12 @@ export function PartsEditor({
     setRemoved(undefined);
   };
   useEffect(() => () => clearTimeout(undoTimer.current), []);
+  useEffect(() => {
+    if (parts !== sent.current) {
+      clearTimeout(undoTimer.current);
+      setRemoved(undefined);
+    }
+  }, [parts]);
 
   // By id, so a Part removed or moved since the edit began is not mistaken for another.
   const setPart = (id: string, patch: Partial<Part>) => {
@@ -75,7 +87,7 @@ export function PartsEditor({
 
   const addPart = (kind: Part["kind"]) => {
     const part = newPart(kind);
-    onPartsChange([...parts, part]);
+    emit([...parts, part]);
     setFocusId(part.id);
   };
 
@@ -208,8 +220,12 @@ export function PartEditor({
     const { current: now } = current;
     onChange(kind === "image" && now.source === "url" ? { ...switchImageSource(now, "upload"), ...loaded } : loaded);
   };
+  // Only the newest read of this Part may apply its result.
+  const readSeq = useRef(0);
   const load = async (kind: "image" | "pdf", file: File) => {
+    const seq = ++readSeq.current;
     const result = await readDroppedFile(kind, file);
+    if (seq !== readSeq.current) return;
     if ("message" in result) return onError(result.message);
     onError();
     place(kind, result.base64, file.name);
