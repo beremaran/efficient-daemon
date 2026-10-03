@@ -95,8 +95,7 @@ export function SchemaPanel({
 
       <TabsContent value="generate" className="mt-2 flex flex-col gap-2 min-h-0">
         <div className="text-xs text-muted-foreground">
-          Paste your ideal JSON; a schema describing it is generated locally (same engine as
-          transform.tools). Then "Use this schema" to put it in the editor.
+          Paste your ideal JSON; a schema describing it is generated locally. Then "Use this schema" to put it in the editor.
         </div>
         <Textarea
           value={sample}
