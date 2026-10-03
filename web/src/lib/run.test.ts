@@ -1,4 +1,3 @@
-import { defaultKeymap } from "@codemirror/commands";
 import { EditorState, keymap } from "@uiw/react-codemirror";
 import { describe, expect, it } from "vitest";
 import type { AskRequest } from "@/lib/ask";
@@ -124,10 +123,10 @@ describe("runShortcutHint", () => {
 });
 
 describe("runKeymap", () => {
-  it("runs on Mod-Enter before the default blank-line binding", () => {
+  it("runs on Mod-Enter before a default binding", () => {
     let runs = 0;
     const state = EditorState.create({
-      extensions: [keymap.of(defaultKeymap), runKeymap(() => void runs++)],
+      extensions: [keymap.of([{ key: "Mod-Enter", run: () => false }]), runKeymap(() => void runs++)],
     });
     const binding = state.facet(keymap).flat().find((b) => b.key === "Mod-Enter");
     expect(binding?.run?.({} as never)).toBe(true);
