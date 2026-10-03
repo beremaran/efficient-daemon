@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
+import { stoppedLabel } from "@/lib/run";
 import { copyText } from "@/lib/store";
 
 export interface RunState {
@@ -30,7 +31,7 @@ export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Ex
         {running ? (
           <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running…</Badge>
         ) : cancelled ? (
-          <Badge variant="outline">Stopped</Badge>
+          <Badge variant="outline">{stoppedLabel(latencyMs ?? 0)}</Badge>
         ) : status !== null ? (
           <>
             <Badge

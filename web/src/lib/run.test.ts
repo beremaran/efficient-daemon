@@ -2,7 +2,8 @@ import { EditorState, keymap } from "@uiw/react-codemirror";
 import { describe, expect, it } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
-import { connectionMissing, isRunShortcut, runBlocker, runKeymap, runShortcutHint, type KeyInfo, type RunInput } from "@/lib/run";
+import type { RunState } from "@/components/ResponsePanel";
+import { connectionMissing, isRunShortcut, runBlocker, runKeymap, runShortcutHint, stoppedLabel, stoppedState, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -131,5 +132,24 @@ describe("runKeymap", () => {
     const binding = state.facet(keymap).flat().find((b) => b.key === "Mod-Enter");
     expect(binding?.run?.({} as never)).toBe(true);
     expect(runs).toBe(1);
+  });
+});
+
+describe("stoppedState", () => {
+  it("keeps the response so far and records the time", () => {
+    const running: RunState = {
+      running: true,
+      status: null,
+      latencyMs: null,
+      responseText: '{"partial":',
+      answers: null,
+      error: null,
+      requestPreview: "{}",
+    };
+    expect(stoppedState(running, 2500)).toEqual({ ...running, running: false, cancelled: true, latencyMs: 2500 });
+  });
+
+  it("labels the time in seconds", () => {
+    expect(stoppedLabel(2500)).toBe("Stopped after 2.5 s");
   });
 });

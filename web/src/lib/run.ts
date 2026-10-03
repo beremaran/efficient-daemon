@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef } from "react";
 import { keymap, Prec, type Extension } from "@uiw/react-codemirror";
+import type { RunState } from "@/components/ResponsePanel";
 import type { AskRequest } from "@/lib/ask";
 import { lintAllowsRun, type LintResult } from "@/lib/lint";
 import type { Part } from "@/lib/types";
@@ -53,6 +54,16 @@ export function isRunShortcut(e: KeyInfo, canRun: boolean) {
     !["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")
   );
 }
+
+// Stop keeps what came back so far and records the time spent.
+export const stoppedState = (prev: RunState, elapsedMs: number): RunState => ({
+  ...prev,
+  running: false,
+  cancelled: true,
+  latencyMs: elapsedMs,
+});
+
+export const stoppedLabel = (elapsedMs: number) => `Stopped after ${(elapsedMs / 1000).toFixed(1)} s`;
 
 export const runShortcutHint = (mac: boolean) => (mac ? "⌘↵" : "Ctrl+Enter");
 

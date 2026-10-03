@@ -14,7 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
-import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint, useRunKeys } from "@/lib/run";
+import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint, stoppedState, useRunKeys } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -139,7 +139,18 @@ export default function App() {
       });
       const latencyHeader = res.headers.get("X-Latency-Ms");
       const latencyMs = latencyHeader ? Number(latencyHeader) : null;
-      let text = await res.text();
+      // Read in chunks so Stop keeps what has arrived.
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      for (;;) {
+        const chunk = await reader?.read();
+        if (!chunk || chunk.done) break;
+        text += decoder.decode(chunk.value, { stream: true });
+        const partial = text;
+        setRun((r) => ({ ...r, responseText: partial }));
+      }
+      text += decoder.decode();
       let answers: string | null = null;
       if (jevjam && res.ok) {
         const wrapped = safeParse(text) as { result?: unknown; answers?: unknown };
@@ -168,7 +179,7 @@ export default function App() {
       });
     } catch (err) {
       if (controller.signal.aborted) {
-        setRun({ ...IDLE_STATE, cancelled: true, requestPreview });
+        setRun((r) => stoppedState(r, Date.now() - startedAt));
         return;
       }
       const message = err instanceof Error ? err.message : String(err);
