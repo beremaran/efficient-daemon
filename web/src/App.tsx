@@ -14,7 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
-import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint, stoppedState, useRunKeys } from "@/lib/run";
+import { connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, stoppedState, useRunKeys } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import { errorMessage } from "@/lib/utils";
 import type { RunRecord, Settings } from "@/lib/types";
@@ -245,6 +245,9 @@ export default function App() {
               <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                 <CardHeader className="flex-row items-center justify-between pb-4">
                   <CardTitle className="text-sm">Connection & sampling</CardTitle>
+                  <span className="ml-auto truncate text-xs text-muted-foreground group-open:hidden">
+                    {connectionSummary({ model, provider: effectiveSettings.provider })}
+                  </span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
                 </CardHeader>
               </summary>

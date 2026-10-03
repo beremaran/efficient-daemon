@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
 import type { RunState } from "@/components/ResponsePanel";
-import { connectionMissing, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, type KeyInfo, type RunInput } from "@/lib/run";
+import { connectionMissing, connectionSummary, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -84,6 +84,20 @@ describe("connectionMissing", () => {
 
   it("does not need a model for jevjam", () => {
     expect(connectionMissing({ model: "", baseURL: "http://llm", jevjam: true })).toBe(false);
+  });
+});
+
+describe("connectionSummary", () => {
+  it("shows the model and provider", () => {
+    expect(connectionSummary({ model: "gpt", provider: "openai" })).toBe("gpt · openai");
+  });
+
+  it("shows not set when the model is missing", () => {
+    expect(connectionSummary({ model: "", provider: "openai" })).toBe("not set · openai");
+  });
+
+  it("omits an empty provider", () => {
+    expect(connectionSummary({ model: "gpt", provider: "" })).toBe("gpt");
   });
 });
 
