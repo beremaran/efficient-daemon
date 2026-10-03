@@ -91,11 +91,30 @@ export function cliArgs(body: AskBody, parts: Part[]): string[] {
   return [...flags, "--schema schema.json", ...(prompt ? [shellQuote(prompt)] : []), ...images];
 }
 
-/** Indents valid JSON; returns any other text unchanged. */
+// A string, a punctuation mark, or a bare token (number, true, false, null).
+const JSON_TOKEN = /"(?:[^"\\]|\\.)*"|[{}[\],:]|[^\s{}[\],:"]+/g;
+
+/** Indents valid JSON without changing any token, so big numbers keep their digits; returns any other text unchanged. */
 export function prettyJson(text: string): string {
   try {
-    return JSON.stringify(JSON.parse(text), null, 2);
+    JSON.parse(text);
   } catch {
     return text;
   }
+  let out = "";
+  let depth = 0;
+  let prev = " ";
+  const pad = () => "\n" + "  ".repeat(depth);
+  for (const [t] of text.matchAll(JSON_TOKEN)) {
+    if (t === "}" || t === "]") {
+      depth--;
+      out += ("{[".includes(prev) ? "" : pad()) + t;
+    } else {
+      if ("{[".includes(prev) && t !== ",") out += pad();
+      if (t === "{" || t === "[") depth++;
+      out += t === "," ? ",\n" + "  ".repeat(depth) : t === ":" ? ": " : t;
+    }
+    prev = t;
+  }
+  return out;
 }

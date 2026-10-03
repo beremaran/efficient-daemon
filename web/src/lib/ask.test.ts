@@ -127,6 +127,12 @@ describe("prettyJson", () => {
     expect(prettyJson('{"a":[1,2]}')).toBe('{\n  "a": [\n    1,\n    2\n  ]\n}');
   });
 
+  it("keeps big numbers and empty containers as written", () => {
+    expect(prettyJson('{"id":9007199254740993,"x":1.50,"a":[],"o":{}}')).toBe(
+      '{\n  "id": 9007199254740993,\n  "x": 1.50,\n  "a": [],\n  "o": {}\n}',
+    );
+  });
+
   it("returns invalid JSON unchanged", () => {
     expect(prettyJson('{"a":')).toBe('{"a":');
     expect(prettyJson("plain text")).toBe("plain text");
