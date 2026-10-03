@@ -10,6 +10,10 @@ describe("SchemaIssuesLink", () => {
     expect(html).toContain("go to schema");
   });
 
+  it("is at least 24x24 px", () => {
+    expect(renderToStaticMarkup(<SchemaIssuesLink count={2} />)).toMatch(/min-h-6[^"]*min-w-6|min-w-6[^"]*min-h-6/);
+  });
+
   it("uses the singular for one issue", () => {
     expect(renderToStaticMarkup(<SchemaIssuesLink count={1} />)).toContain("1 schema issue ");
   });

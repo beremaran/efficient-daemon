@@ -11,7 +11,7 @@ export function SchemaIssuesLink({ count }: { count: number }) {
     <button
       type="button"
       onClick={() => focusSchemaCard(document)}
-      className="text-xs text-destructive underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
+      className="min-h-6 min-w-6 text-xs text-destructive underline underline-offset-2 hover:no-underline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-ring"
     >
       {count} schema issue{count === 1 ? "" : "s"} — go to schema
     </button>
