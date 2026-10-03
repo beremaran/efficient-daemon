@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
 import type { RunState } from "@/components/ResponsePanel";
-import { connectionMissing, connectionSummary, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, type KeyInfo, type RunInput } from "@/lib/run";
+import { connectionMissing, connectionSummary, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, systemSummary, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -98,6 +98,17 @@ describe("connectionSummary", () => {
 
   it("omits an empty provider", () => {
     expect(connectionSummary({ model: "gpt", provider: "" })).toBe("gpt");
+  });
+});
+
+describe("systemSummary", () => {
+  it("says set when the system message has text", () => {
+    expect(systemSummary("Be brief")).toBe("set");
+  });
+
+  it("is empty when the system message is empty or blank", () => {
+    expect(systemSummary("")).toBe("");
+    expect(systemSummary("  \n")).toBe("");
   });
 });
 

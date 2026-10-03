@@ -28,6 +28,9 @@ export const connectionMissing = (i: Pick<RunInput, "model" | "baseURL" | "jevja
 export const connectionSummary = (i: Pick<RunInput, "model"> & { provider: string }) =>
   [i.model || "not set", i.provider].filter(Boolean).join(" · ");
 
+/** Closed System message header text: "set" when it holds text. */
+export const systemSummary = (system: string) => (system.trim() ? "set" : "");
+
 export function runBlocker(i: RunInput): string | null {
   if (!i.model && !i.jevjam) return "Add a model in Connection & sampling";
   if (!i.baseURL) return "Add a base URL in Connection & sampling";
