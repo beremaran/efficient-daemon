@@ -28,13 +28,24 @@ export function PartsEditor({
   const setFileError = (id: string, message?: string) =>
     setFileErrors(({ [id]: _old, ...rest }) => (message ? { ...rest, [id]: message } : rest));
 
-  const setPart = (index: number, patch: Partial<Part>) => {
-    const next = [...parts];
-    next[index] = { ...next[index], ...patch };
+  // The Part just added; it takes focus until the next change.
+  const [focusId, setFocusId] = useState<string>();
+  const change = (next: Part[]) => {
+    setFocusId(undefined);
     onPartsChange(next);
   };
 
-  const addPart = (kind: Part["kind"]) => onPartsChange([...parts, newPart(kind)]);
+  const setPart = (index: number, patch: Partial<Part>) => {
+    const next = [...parts];
+    next[index] = { ...next[index], ...patch };
+    change(next);
+  };
+
+  const addPart = (kind: Part["kind"]) => {
+    const part = newPart(kind);
+    onPartsChange([...parts, part]);
+    setFocusId(part.id);
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -45,13 +56,14 @@ export function PartsEditor({
           part={part}
           count={parts.length}
           error={fileErrors[part.id]}
+          autoFocus={part.id === focusId}
           onError={(message) => setFileError(part.id, message)}
           onChange={(patch) => setPart(i, patch)}
           onRemove={() => {
             setFileError(part.id);
-            onPartsChange(removePart(parts, i));
+            change(removePart(parts, i));
           }}
-          onMove={(delta) => onPartsChange(movePart(parts, i, delta))}
+          onMove={(delta) => change(movePart(parts, i, delta))}
         />
       ))}
 
@@ -97,6 +109,7 @@ export function PartEditor({
   part,
   count,
   error,
+  autoFocus,
   onError,
   onChange,
   onRemove,
@@ -107,6 +120,8 @@ export function PartEditor({
   count: number;
   /** File error to show under this Part. */
   error?: string;
+  /** Focus the first field on mount. */
+  autoFocus?: boolean;
   onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
   onRemove: () => void;
@@ -141,10 +156,11 @@ export function PartEditor({
             onChange={(e) => onChange({ text: e.target.value })}
             placeholder="Text content…"
             className="min-h-[160px]"
+            autoFocus={autoFocus}
           />
         )}
-        {part.kind === "image" && <ImagePartEditor part={part} error={error} onError={onError} onChange={onChange} />}
-        {part.kind === "pdf" && <PdfPartEditor part={part} error={error} onError={onError} onChange={onChange} />}
+        {part.kind === "image" && <ImagePartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} />}
+        {part.kind === "pdf" && <PdfPartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} />}
       </CardContent>
     </Card>
   );
@@ -153,11 +169,13 @@ export function PartEditor({
 function ImagePartEditor({
   part,
   error,
+  autoFocus,
   onError,
   onChange,
 }: {
   part: Part;
   error?: string;
+  autoFocus?: boolean;
   onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
 }) {
@@ -182,6 +200,7 @@ function ImagePartEditor({
           onChange={(e) => onChange({ image: e.target.value })}
           placeholder="https://example.com/picture.png"
           spellCheck={false}
+          autoFocus={autoFocus}
         />
       ) : (
         <FileInput
@@ -189,6 +208,7 @@ function ImagePartEditor({
           enforceImageCap
           fileName={part.fileName}
           error={error}
+          autoFocus={autoFocus}
           onError={onError}
           onFile={(b64, name) => onChange({ image: b64, fileName: name })}
         />
@@ -207,11 +227,13 @@ function ImagePartEditor({
 function PdfPartEditor({
   part,
   error,
+  autoFocus,
   onError,
   onChange,
 }: {
   part: Part;
   error?: string;
+  autoFocus?: boolean;
   onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
 }) {
@@ -220,6 +242,7 @@ function PdfPartEditor({
       accept="application/pdf,.pdf"
       fileName={part.fileName}
       error={error}
+      autoFocus={autoFocus}
       onError={onError}
       onFile={(pdf, name) => onChange({ pdf, fileName: name })}
     />
@@ -231,6 +254,7 @@ function FileInput({
   fileName,
   enforceImageCap,
   error,
+  autoFocus,
   onError,
   onFile,
 }: {
@@ -238,6 +262,7 @@ function FileInput({
   enforceImageCap?: boolean;
   fileName?: string;
   error?: string;
+  autoFocus?: boolean;
   onError: (message?: string) => void;
   onFile: (base64: string, name: string) => void;
 }) {
@@ -262,7 +287,7 @@ function FileInput({
         }}
       />
       <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+        <Button type="button" variant="outline" size="sm" autoFocus={autoFocus} onClick={() => inputRef.current?.click()}>
           <Plus /> Choose file
         </Button>
         {fileName && <span className="truncate text-xs text-muted-foreground">{fileName}</span>}

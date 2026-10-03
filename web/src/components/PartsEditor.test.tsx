@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { PartEditor } from "@/components/PartsEditor";
 import { checkImageFile, readPartFile } from "@/lib/media";
 import { newPart } from "@/lib/parts";
-import { MAX_IMAGE_BYTES } from "@/lib/types";
+import { MAX_IMAGE_BYTES, type Part } from "@/lib/types";
 
 const render = (error?: string, index = 0) =>
   renderToStaticMarkup(
@@ -66,5 +66,41 @@ describe("file read error", () => {
     const html = render("Could not read gone.pdf");
     expect(html).toContain(`role="alert"`);
     expect(html).toContain("Could not read gone.pdf");
+  });
+});
+
+describe("focus after adding", () => {
+  const renderPart = (part: Part, autoFocus?: boolean) =>
+    renderToStaticMarkup(
+      <PartEditor
+        index={0}
+        part={part}
+        count={1}
+        autoFocus={autoFocus}
+        onError={() => {}}
+        onChange={() => {}}
+        onRemove={() => {}}
+        onMove={() => {}}
+      />,
+    );
+
+  it.each([
+    ["text", "textarea"],
+    ["image", "input"],
+    ["pdf", "button"],
+  ] as const)("puts focus on the first field of a new %s Part", (kind, tag) => {
+    const html = renderPart(newPart(kind), true);
+    expect(html.match(/autofocus/gi)).toHaveLength(1);
+    expect(html.match(/<(\w+)[^>]*autofocus/i)?.[1]).toBe(tag);
+  });
+
+  it("puts focus on the file button of an image Part in upload mode", () => {
+    expect(renderPart({ ...newPart("image"), source: "upload" }, true).match(/autofocus/gi)).toHaveLength(1);
+  });
+
+  it("leaves focus alone by default", () => {
+    for (const kind of ["text", "image", "pdf"] as const) {
+      expect(renderPart(newPart(kind))).not.toMatch(/autofocus/i);
+    }
   });
 });
