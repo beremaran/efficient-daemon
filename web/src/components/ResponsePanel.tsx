@@ -6,6 +6,7 @@ import { Badge } from "@/components/ui/badge";
 import { CopyButton } from "@/components/CopyButton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { prettyJson } from "@/lib/ask";
 import { useState } from "react";
 
 export interface RunState {
@@ -23,6 +24,7 @@ export interface RunState {
 export function ResponsePanel({ state }: { state: RunState }) {
   const { running, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
   const [tab, setTab] = useState("response");
+  const shown = prettyJson(responseText);
   const noRunYet = !running && !cancelled && status === null && !responseText && !error;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
@@ -52,7 +54,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
         </div>
         <span className="flex-1" />
         {responseText && (
-          <CopyButton text={responseText} variant="ghost" size="sm">
+          <CopyButton text={shown} variant="ghost" size="sm">
             Copy response
           </CopyButton>
         )}
@@ -86,7 +88,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
           ) : (
             <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
               <CodeMirror
-                value={responseText}
+                value={shown}
                 height="100%"
                 extensions={[json()]}
                 theme={oneDark}
