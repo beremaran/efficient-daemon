@@ -47,4 +47,18 @@ export async function readPartFile(
   }
 }
 
+/** True when a drag carries files. */
+export const dragHasFiles = (dt: Pick<DataTransfer, "types"> | null): boolean => Array.from(dt?.types ?? []).includes("Files");
+
+/** Reads a file dropped on an image or PDF Part; a wrong type, size or read failure comes back as a message. */
+export async function readDroppedFile(
+  kind: "image" | "pdf",
+  file: File,
+): Promise<{ base64: string } | { message: string }> {
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (kind === "image" ? !isImage : !isPdf) return { message: `${file.name} is not ${kind === "image" ? "an image" : "a PDF"}` };
+  return readPartFile(file, kind === "image");
+}
+
 export const MAX_BODY_MB = Math.floor(MAX_BODY_BYTES / (1 << 20));

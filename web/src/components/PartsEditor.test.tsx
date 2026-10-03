@@ -2,7 +2,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { PartEditor, PartsEditor, UndoNotice } from "@/components/PartsEditor";
-import { checkImageFile, readPartFile } from "@/lib/media";
+import { checkImageFile, dragHasFiles, readDroppedFile, readPartFile } from "@/lib/media";
 import { newPart } from "@/lib/parts";
 import { MAX_IMAGE_BYTES, type Part } from "@/lib/types";
 
@@ -160,5 +160,48 @@ describe("image source choice", () => {
 
   it("selects the tab of the Part's source", () => {
     expect(html).toMatch(/aria-selected="true"[^>]*data-state="active"[^>]*>Upload</);
+  });
+});
+
+describe("file drop", () => {
+  afterEach(() => vi.unstubAllGlobals());
+  const stubReader = () =>
+    vi.stubGlobal(
+      "FileReader",
+      class {
+        result = "data:;base64,QUJD";
+        onload?: () => void;
+        readAsDataURL() {
+          this.onload?.();
+        }
+      },
+    );
+
+  it("loads a dropped image", async () => {
+    stubReader();
+    const file = { name: "a.png", type: "image/png", size: 3 } as File;
+    expect(await readDroppedFile("image", file)).toEqual({ base64: "QUJD" });
+  });
+
+  it("loads a dropped PDF", async () => {
+    stubReader();
+    const file = { name: "a.pdf", type: "application/pdf", size: 3 } as File;
+    expect(await readDroppedFile("pdf", file)).toEqual({ base64: "QUJD" });
+  });
+
+  it("shows the same too-large error as the file picker", async () => {
+    const file = { name: "big.png", type: "image/png", size: MAX_IMAGE_BYTES + 1 } as File;
+    expect(await readDroppedFile("image", file)).toEqual({ message: checkImageFile(file).message });
+  });
+
+  it("rejects a file of the wrong type", async () => {
+    const file = { name: "a.pdf", type: "application/pdf", size: 3 } as File;
+    expect(await readDroppedFile("image", file)).toEqual({ message: "a.pdf is not an image" });
+  });
+
+  it("reacts only to drags that carry files", () => {
+    expect(dragHasFiles({ types: ["Files"] })).toBe(true);
+    expect(dragHasFiles({ types: ["text/plain"] })).toBe(false);
+    expect(dragHasFiles(null)).toBe(false);
   });
 });

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { MAX_BODY_MB, readPartFile } from "@/lib/media";
+import { MAX_BODY_MB, dragHasFiles, readDroppedFile, readPartFile } from "@/lib/media";
 import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, switchImageSource } from "@/lib/parts";
 import { MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
@@ -179,8 +179,35 @@ export function PartEditor({
   onRemove: () => void;
   onMove: (delta: -1 | 1) => void;
 }) {
+  // A file dropped on an image or PDF Part loads into it.
+  const [over, setOver] = useState(false);
+  const kind = part.kind === "image" || part.kind === "pdf" ? part.kind : undefined;
+  const accepts = (e: React.DragEvent) => kind !== undefined && dragHasFiles(e.dataTransfer);
   return (
-    <Card data-part-id={part.id}>
+    <Card
+      data-part-id={part.id}
+      data-drop-over={over || undefined}
+      className={cn(over && "ring-2 ring-primary")}
+      onDragOver={(e) => {
+        if (!accepts(e)) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={async (e) => {
+        setOver(false);
+        const file = e.dataTransfer.files[0];
+        if (!kind || !file) return;
+        e.preventDefault();
+        const result = await readDroppedFile(kind, file);
+        if ("message" in result) return onError(result.message);
+        onError();
+        const loaded = kind === "image" ? { image: result.base64, fileName: file.name } : { pdf: result.base64, fileName: file.name };
+        onChange(kind === "image" && part.source === "url" ? { ...switchImageSource(part, "upload"), ...loaded } : loaded);
+      }}
+    >
       <CardHeader className="flex flex-row items-center justify-between gap-2 py-3">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Badge variant="outline">#{index + 1}</Badge>
