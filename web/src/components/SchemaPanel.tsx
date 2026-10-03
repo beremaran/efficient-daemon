@@ -3,9 +3,9 @@ import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LintStatus } from "@/components/LintStatus";
 import { Textarea } from "@/components/ui/textarea";
 import type { LintResult } from "@/lib/lint";
 
@@ -76,22 +76,7 @@ export function SchemaPanel({
           <TabsTrigger value="edit">Edit</TabsTrigger>
           <TabsTrigger value="generate">Generate from JSON</TabsTrigger>
         </TabsList>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {linting && <span>linting…</span>}
-          {lint && !linting && lint.valid && lint.warnings.length === 0 && (
-            <Badge className="border-emerald-600/30 bg-emerald-50 text-emerald-700">schema OK</Badge>
-          )}
-          {lint && !linting && (!lint.valid || lint.warnings.length > 0) && (
-            <span>
-              {!lint.valid && <Badge className="mr-1 border-destructive/30 bg-destructive/10 text-destructive">invalid</Badge>}
-              {lint.warnings.length > 0 && (
-                <Badge className="border-warning/40 bg-warning/10 text-warning-foreground">
-                  {lint.warnings.length} warning{lint.warnings.length > 1 ? "s" : ""}
-                </Badge>
-              )}
-            </span>
-          )}
-        </div>
+        <LintStatus lint={lint} linting={linting} />
       </div>
 
       <TabsContent value="edit" className="mt-2 min-h-0">
