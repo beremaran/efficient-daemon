@@ -1,7 +1,9 @@
+import { defaultKeymap } from "@codemirror/commands";
+import { EditorState, keymap } from "@uiw/react-codemirror";
 import { describe, expect, it } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
-import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint, type KeyInfo, type RunInput } from "@/lib/run";
+import { connectionMissing, isRunShortcut, runBlocker, runKeymap, runShortcutHint, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -118,5 +120,17 @@ describe("runShortcutHint", () => {
   it("fits the platform", () => {
     expect(runShortcutHint(true)).toBe("⌘↵");
     expect(runShortcutHint(false)).toBe("Ctrl+Enter");
+  });
+});
+
+describe("runKeymap", () => {
+  it("runs on Mod-Enter before the default blank-line binding", () => {
+    let runs = 0;
+    const state = EditorState.create({
+      extensions: [keymap.of(defaultKeymap), runKeymap(() => void runs++)],
+    });
+    const binding = state.facet(keymap).flat().find((b) => b.key === "Mod-Enter");
+    expect(binding?.run?.({} as never)).toBe(true);
+    expect(runs).toBe(1);
   });
 });

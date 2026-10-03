@@ -14,7 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
-import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint } from "@/lib/run";
+import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint, useRunKeys } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -207,6 +207,10 @@ export default function App() {
     return () => document.removeEventListener("keydown", onKey);
   });
 
+  const runKeys = useRunKeys(() => {
+    if (canRun) void runRequest();
+  });
+
   const restore = (record: RunRecord) => setDraft(record.draft);
 
   return (
@@ -286,6 +290,7 @@ export default function App() {
                 onSchemaChange={(schema) => setDraft({ ...draft, schema })}
                 lint={lint}
                 linting={checking}
+                runKeys={runKeys}
               />
             </CardContent>
           </Card>
@@ -301,10 +306,10 @@ export default function App() {
             <Card className="flex min-h-0 flex-1 flex-col">
               <CardContent className="flex min-h-0 flex-1 flex-col pt-4">
                 <TabsContent value="response" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsePanel state={run} />
+                  <ResponsePanel state={run} runKeys={runKeys} />
                 </TabsContent>
                 <TabsContent value="codegen" className="flex flex-col">
-                  <CodegenPanel request={request} parts={deferredDraft.parts} schema={deferredDraft.schema} />
+                  <CodegenPanel request={request} parts={deferredDraft.parts} schema={deferredDraft.schema} runKeys={runKeys} />
                 </TabsContent>
                 <TabsContent value="history">
                   <HistoryPanel history={history} onRestore={restore} onClear={clear} />

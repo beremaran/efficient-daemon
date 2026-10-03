@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -32,11 +32,13 @@ export function SchemaPanel({
   onSchemaChange,
   lint,
   linting,
+  runKeys,
 }: {
   schema: string;
   onSchemaChange: (next: string) => void;
   lint: LintResult | null;
   linting: boolean;
+  runKeys: Extension;
 }) {
   const [mode, setMode] = useState<"edit" | "generate">("edit");
   const [sample, setSample] = useState("");
@@ -101,7 +103,7 @@ export function SchemaPanel({
           <CodeMirror
             value={schema}
             height="300px"
-            extensions={[json()]}
+            extensions={[json(), runKeys]}
             theme={oneDark}
             basicSetup={{ foldGutter: true }}
             onChange={(value) => onSchemaChange(value)}
@@ -145,7 +147,7 @@ export function SchemaPanel({
             <CodeMirror
               value={preview}
               height="160px"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
               editable={false}
             />

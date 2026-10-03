@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { StreamLanguage } from "@codemirror/language";
 import { go } from "@codemirror/legacy-modes/mode/go";
 import { javascript } from "@codemirror/legacy-modes/mode/javascript";
@@ -32,10 +32,12 @@ export function CodegenPanel({
   request,
   parts,
   schema,
+  runKeys,
 }: {
   request: AskRequest;
   parts: Part[];
   schema: string;
+  runKeys: Extension;
 }) {
   const [lang, setLang] = useState<Lang>("curl");
   const [copied, setCopied] = useState(false);
@@ -80,7 +82,7 @@ export function CodegenPanel({
           value={display}
           height="100%"
           maxHeight="100%"
-          extensions={[LANGUAGE_EXTENSIONS[lang]]}
+          extensions={[LANGUAGE_EXTENSIONS[lang], runKeys]}
           theme={oneDark}
           editable={false}
           className="h-full min-h-0 text-xs"

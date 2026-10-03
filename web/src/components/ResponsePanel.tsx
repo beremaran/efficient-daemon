@@ -1,4 +1,4 @@
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -21,7 +21,7 @@ export interface RunState {
   requestPreview: string;
 }
 
-export function ResponsePanel({ state }: { state: RunState }) {
+export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Extension }) {
   const { running, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
   const [tab, setTab] = useState("response");
   return (
@@ -75,7 +75,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
             <CodeMirror
               value={responseText || "// run a request to see the response"}
               height="100%"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
               editable={false}
               className="h-full min-h-0"
@@ -92,7 +92,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
             <CodeMirror
               value={requestPreview}
               height="100%"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
               editable={false}
               className="h-full min-h-0"

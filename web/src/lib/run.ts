@@ -1,5 +1,7 @@
 // Why Run is disabled: the first reason, or null when Run can go.
 
+import { useEffect, useMemo, useRef } from "react";
+import { keymap, Prec, type Extension } from "@uiw/react-codemirror";
 import type { AskRequest } from "@/lib/ask";
 import { lintAllowsRun, type LintResult } from "@/lib/lint";
 import type { Part } from "@/lib/types";
@@ -53,3 +55,17 @@ export function isRunShortcut(e: KeyInfo, canRun: boolean) {
 }
 
 export const runShortcutHint = (mac: boolean) => (mac ? "⌘↵" : "Ctrl+Enter");
+
+// Beats the default Mod-Enter (insert blank line), so the shortcut runs from inside editors too.
+export const runKeymap = (run: () => void): Extension =>
+  Prec.highest(keymap.of([{ key: "Mod-Enter", run: () => (run(), true) }]));
+
+// One stable extension that calls the latest `run`, so editors never reconfigure.
+export function useRunKeys(run: () => void): Extension {
+  const latest = useRef(run);
+  useEffect(() => {
+    latest.current = run;
+  });
+  // oxlint-disable-next-line react/refs -- read on a key press, not during render
+  return useMemo(() => runKeymap(() => latest.current()), []);
+}
