@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { movePart, newPart, removePart, withPartIds } from "@/lib/parts";
+import { focusAfterRemove, movePart, newPart, removePart, withPartIds } from "@/lib/parts";
 import { loadDraft } from "@/lib/store";
 
 const texts = (parts: { text?: string }[]) => parts.map((p) => p.text);
@@ -49,5 +49,22 @@ describe("loadDraft", () => {
     expect(texts(parts)).toEqual(["a", undefined]);
     expect(parts.every((p) => p.id)).toBe(true);
     expect(parts[0].id).not.toBe(parts[1].id);
+  });
+});
+
+describe("focusAfterRemove", () => {
+  const parts = [newPart("text"), newPart("image"), newPart("pdf")];
+
+  it("picks the next Part", () => {
+    expect(focusAfterRemove(parts, 0)).toBe(parts[1].id);
+    expect(focusAfterRemove(parts, 1)).toBe(parts[2].id);
+  });
+
+  it("picks the previous Part when the last one goes", () => {
+    expect(focusAfterRemove(parts, 2)).toBe(parts[1].id);
+  });
+
+  it("picks nothing when no Parts remain", () => {
+    expect(focusAfterRemove(parts.slice(0, 1), 0)).toBeUndefined();
   });
 });

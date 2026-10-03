@@ -18,6 +18,10 @@ export const withPartIds = (parts: Part[]): Part[] =>
 
 export const removePart = (parts: Part[], index: number): Part[] => parts.filter((_, i) => i !== index);
 
+/** Id of the Part that takes focus after removing the one at `index`: the next, else the previous. */
+export const focusAfterRemove = (parts: Part[], index: number): string | undefined =>
+  (parts[index + 1] ?? parts[index - 1])?.id;
+
 export function movePart(parts: Part[], index: number, delta: -1 | 1): Part[] {
   const target = index + delta;
   if (target < 0 || target >= parts.length) return parts;

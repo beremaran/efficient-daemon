@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, Image as ImageIcon, Plus, Trash2, Type } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_BODY_MB, readPartFile } from "@/lib/media";
-import { movePart, newPart, removePart } from "@/lib/parts";
+import { focusAfterRemove, movePart, newPart, removePart } from "@/lib/parts";
 import { MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -35,6 +35,19 @@ export function PartsEditor({
     onPartsChange(next);
   };
 
+  // Where focus goes after a remove: a Part id, or the add buttons when `id` is unset.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const afterRemove = useRef<{ id?: string }>(undefined);
+  useEffect(() => {
+    if (!afterRemove.current) return;
+    const { id } = afterRemove.current;
+    afterRemove.current = undefined;
+    const target = id
+      ? rootRef.current?.querySelector(`[data-part-id="${id}"] [aria-label="remove part"]`)
+      : rootRef.current?.querySelector("[data-add-parts] button");
+    (target as HTMLElement | null)?.focus();
+  }, [parts]);
+
   const setPart = (index: number, patch: Partial<Part>) => {
     const next = [...parts];
     next[index] = { ...next[index], ...patch };
@@ -48,7 +61,7 @@ export function PartsEditor({
   };
 
   return (
-    <div className="flex flex-col gap-2">
+    <div ref={rootRef} className="flex flex-col gap-2">
       {parts.map((part, i) => (
         <PartEditor
           key={part.id}
@@ -62,6 +75,7 @@ export function PartsEditor({
           onRemove={() => {
             setFileError(part.id);
             change(removePart(parts, i));
+            afterRemove.current = { id: focusAfterRemove(parts, i) };
           }}
           onMove={(delta) => change(movePart(parts, i, delta))}
         />
@@ -69,7 +83,7 @@ export function PartsEditor({
 
       {bytes !== null && <PayloadMeter totalBytes={bytes} />}
 
-      <div className="flex items-center gap-2">
+      <div data-add-parts className="flex items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => addPart("text")}>
           <Type /> Text
         </Button>
@@ -128,7 +142,7 @@ export function PartEditor({
   onMove: (delta: -1 | 1) => void;
 }) {
   return (
-    <Card>
+    <Card data-part-id={part.id}>
       <CardHeader className="flex flex-row items-center justify-between gap-2 py-3">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Badge variant="outline">#{index + 1}</Badge>

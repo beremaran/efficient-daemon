@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PartEditor } from "@/components/PartsEditor";
+import { PartEditor, PartsEditor } from "@/components/PartsEditor";
 import { checkImageFile, readPartFile } from "@/lib/media";
 import { newPart } from "@/lib/parts";
 import { MAX_IMAGE_BYTES, type Part } from "@/lib/types";
@@ -102,5 +102,15 @@ describe("focus after adding", () => {
     for (const kind of ["text", "image", "pdf"] as const) {
       expect(renderPart(newPart(kind))).not.toMatch(/autofocus/i);
     }
+  });
+});
+
+describe("focus after remove", () => {
+  it("marks each Part and the add buttons as focus targets", () => {
+    const parts = [newPart("text"), newPart("pdf")];
+    const html = renderToStaticMarkup(<PartsEditor parts={parts} bytes={null} onPartsChange={() => {}} />);
+    for (const { id } of parts) expect(html).toContain(`data-part-id="${id}"`);
+    expect(html).toContain("data-add-parts");
+    expect(html.match(/aria-label="remove part"/g)).toHaveLength(2);
   });
 });
