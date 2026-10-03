@@ -2,11 +2,18 @@
 import { useState } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { act } from "react";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { PartsEditor } from "@/components/PartsEditor";
 import { newPart } from "@/lib/parts";
 import type { Part } from "@/lib/types";
+
+// The read of a dropped file ends when the test says so.
+let finishRead: (base64: string) => void;
+vi.mock("@/lib/media", async (importOriginal) => ({
+  ...(await importOriginal<typeof import("@/lib/media")>()),
+  readDroppedFile: () => new Promise((resolve) => (finishRead = (base64) => resolve({ base64 }))),
+}));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -85,5 +92,44 @@ describe("focus after removing a Part", () => {
     click("Undo");
     expect(host.querySelectorAll("[data-part-id]")).toHaveLength(3);
     expect(document.activeElement).toBe(removeButton(file.id));
+  });
+});
+
+describe("a file dropped on a Part", () => {
+  const drop = (id: string) => {
+    const event = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(event, "dataTransfer", { value: { files: [new File(["x"], "cat.png")], types: ["Files"] } });
+    act(() => void host.querySelector(`[data-part-id="${id}"]`)!.dispatchEvent(event));
+  };
+
+  it("does not bring back a Part removed during the read", async () => {
+    const [image, other] = [newPart("image"), newPart("text")];
+    mount([image, other]);
+    drop(image.id);
+    click("Remove part 2");
+    await act(async () => finishRead("AAAA"));
+    expect(host.querySelectorAll("[data-part-id]")).toHaveLength(1);
+    expect(host.textContent).toContain("cat.png");
+  });
+
+  it("lands on the same Part after a move", async () => {
+    const [image, other] = [newPart("image"), newPart("text")];
+    mount([image, other]);
+    drop(image.id);
+    click("Move part 1 down");
+    await act(async () => finishRead("AAAA"));
+    const [first, second] = host.querySelectorAll("[data-part-id]");
+    expect(first.getAttribute("data-part-id")).toBe(other.id);
+    expect(second.textContent).toContain("cat.png");
+  });
+
+  it("is dropped when its Part is removed during the read", async () => {
+    const [image, other] = [newPart("image"), newPart("text")];
+    mount([image, other]);
+    drop(image.id);
+    click("Remove part 1");
+    await act(async () => finishRead("AAAA"));
+    expect(host.querySelectorAll("[data-part-id]")).toHaveLength(1);
+    expect(host.textContent).not.toContain("cat.png");
   });
 });

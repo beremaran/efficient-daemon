@@ -35,9 +35,14 @@ export function PartsEditor({
 
   // The Part just added; it takes focus until the next change.
   const [focusId, setFocusId] = useState<string>();
+  // File reads finish late, so edits that land after one read the latest props from a ref.
+  const latest = useRef({ parts, onPartsChange });
+  useEffect(() => {
+    latest.current = { parts, onPartsChange };
+  });
   const change = (next: Part[]) => {
     setFocusId(undefined);
-    onPartsChange(next);
+    latest.current.onPartsChange(next);
   };
 
   // Where focus goes after a remove or Undo: a Part id, or the add buttons when `id` is unset.
@@ -62,10 +67,10 @@ export function PartsEditor({
   };
   useEffect(() => () => clearTimeout(undoTimer.current), []);
 
-  const setPart = (index: number, patch: Partial<Part>) => {
-    const next = [...parts];
-    next[index] = { ...next[index], ...patch };
-    change(next);
+  // By id, so a Part removed or moved since the edit began is not mistaken for another.
+  const setPart = (id: string, patch: Partial<Part>) => {
+    const { parts } = latest.current;
+    if (parts.some((p) => p.id === id)) change(parts.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   };
 
   const addPart = (kind: Part["kind"]) => {
@@ -93,7 +98,7 @@ export function PartsEditor({
           error={fileErrors[part.id]}
           autoFocus={part.id === focusId}
           onError={(message) => setFileError(part.id, message)}
-          onChange={(patch) => setPart(i, patch)}
+          onChange={(patch) => setPart(part.id, patch)}
           onRemove={() => {
             setFileError(part.id);
             change(removePart(parts, i));
@@ -193,12 +198,17 @@ export function PartEditor({
   // A file dropped on an image or PDF Part, or an image pasted into an image Part, loads into it.
   const [over, setOver] = useState(false);
   const kind = part.kind === "image" || part.kind === "pdf" ? part.kind : undefined;
+  const current = useRef(part);
+  useEffect(() => {
+    current.current = part;
+  });
   const load = async (kind: "image" | "pdf", file: File) => {
     const result = await readDroppedFile(kind, file);
     if ("message" in result) return onError(result.message);
     onError();
     const loaded = kind === "image" ? { image: result.base64, fileName: file.name } : { pdf: result.base64, fileName: file.name };
-    onChange(kind === "image" && part.source === "url" ? { ...switchImageSource(part, "upload"), ...loaded } : loaded);
+    const { current: now } = current;
+    onChange(kind === "image" && now.source === "url" ? { ...switchImageSource(now, "upload"), ...loaded } : loaded);
   };
   const accepts = (e: React.DragEvent) => kind !== undefined && dragHasFiles(e.dataTransfer);
   return (
