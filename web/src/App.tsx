@@ -13,7 +13,7 @@ import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { buildAskRequest, lintBody } from "@/lib/ask";
-import { lintSchema, lintView, type LintResult } from "@/lib/lint";
+import { lintAllowsRun, lintSchema, lintView, type LintResult } from "@/lib/lint";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -53,8 +53,9 @@ export default function App() {
     [draft, effectiveSettings],
   );
   // Lint re-runs only when the schema, provider or max score levels change.
+  const lintInput = request.ok ? JSON.stringify(lintBody(request.body)) : null;
   const [lintJSON, lintError] = useDebounced<[string | null, string | null]>(
-    request.ok ? [JSON.stringify(lintBody(request.body)), null] : [null, request.error],
+    [lintInput, request.ok ? null : request.error],
     300,
   );
 
@@ -91,7 +92,9 @@ export default function App() {
 
   const requestPreview = request.ok ? request.json : "{}";
 
-  const lintErrors = lintView(lint, linting).errors;
+  // A check is pending from the edit until its result lands, including the debounce wait.
+  const checking = linting || lintInput !== lintJSON;
+  const lintErrors = lintView(lint, checking).errors;
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
   const jevjam = effectiveSettings.provider === "jevjam";
@@ -100,7 +103,7 @@ export default function App() {
     (!!model || jevjam) &&
     !!baseURL &&
     draft.parts.length > 0 &&
-    lintErrors.length === 0 &&
+    lintAllowsRun(lint, checking) &&
     request.ok &&
     !!draft.parts.some((p) =>
       p.kind === "text" ? (p.text ?? "").trim() : (p.image ?? p.pdf ?? "").trim(),
@@ -257,7 +260,7 @@ export default function App() {
                 schema={draft.schema}
                 onSchemaChange={(schema) => setDraft({ ...draft, schema })}
                 lint={lint}
-                linting={linting}
+                linting={checking}
               />
             </CardContent>
           </Card>

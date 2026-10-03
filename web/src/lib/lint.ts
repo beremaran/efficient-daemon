@@ -33,3 +33,8 @@ export async function lintSchema(body: string): Promise<LintResult> {
 export function lintView(lint: LintResult | null, linting: boolean) {
   return { errors: lint?.errors ?? [], warnings: lint?.warnings ?? [], stale: !!lint && linting };
 }
+
+/** Run needs a finished check that passed; no result yet, or a check in progress, blocks it. */
+export function lintAllowsRun(lint: LintResult | null, checking: boolean): boolean {
+  return !!lint && !checking && lint.errors.length === 0;
+}
