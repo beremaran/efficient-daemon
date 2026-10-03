@@ -97,6 +97,15 @@ describe("Run", () => {
 });
 
 describe("schema check", () => {
+  it("blocks Run while the deferred Draft lags a lint input edit", async () => {
+    defer.frozen = true;
+    await mount();
+    await finishLint(0);
+    expect(button("Run")!.disabled).toBe(false);
+    type(field("input[type=number]"), "4");
+    expect(button("Run")!.disabled).toBe(true);
+  });
+
   it("ignores a lint reply that lands after a newer one", async () => {
     await mount();
     type(field("input[type=number]"), "4");

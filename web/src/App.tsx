@@ -102,8 +102,14 @@ export default function App() {
   const lint: LintResult | null =
     lintError !== null ? { valid: false, errors: [lintError], warnings: [] } : lintResult;
 
-  // A check is pending from the edit until its result lands, including the debounce wait.
-  const checking = linting || (lintInput !== null && lintInput !== lintedBody);
+  // A check is pending from the edit until its result lands, including the debounce wait
+  // and the wait for the deferred Draft to catch up with a lint input edit.
+  const { settings: live } = draft;
+  const lintEdited =
+    draft.schema !== deferredDraft.schema ||
+    live.provider !== deferredDraft.settings.provider ||
+    live.maxScoreLevels !== deferredDraft.settings.maxScoreLevels;
+  const checking = linting || lintEdited || (lintInput !== null && lintInput !== lintedBody);
   const lintErrors = lintView(lint, checking).errors;
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
