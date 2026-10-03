@@ -72,7 +72,7 @@ export function SchemaPanel({
   return (
     <Tabs value={mode} onValueChange={(v) => setMode(v as "edit" | "generate")} className="flex flex-col">
       <div className="flex items-center justify-between gap-2">
-        <TabsList>
+        <TabsList variant="line">
           <TabsTrigger value="edit">Edit</TabsTrigger>
           <TabsTrigger value="generate">Generate from JSON</TabsTrigger>
         </TabsList>

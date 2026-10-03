@@ -78,7 +78,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
       <Separator />
 
       <Tabs value={tab === "answers" && !answers ? "response" : tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-3">
-        <TabsList className="self-end">
+        <TabsList variant="line" className="self-end">
           <TabsTrigger value="response">Response</TabsTrigger>
           {answers && <TabsTrigger value="answers">Answers</TabsTrigger>}
           <TabsTrigger value="request">Ask request</TabsTrigger>

@@ -50,7 +50,7 @@ export function CodegenPanel({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2">
         <Tabs value={lang} onValueChange={(v) => setLang(v as Lang)}>
-          <TabsList>
+          <TabsList variant="line">
             {LANGS.map((l) => (
               <TabsTrigger key={l} value={l}>
                 {prettyLabel(l)}
