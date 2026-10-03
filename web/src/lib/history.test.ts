@@ -41,6 +41,28 @@ describe("history files", () => {
     expect(filesToPick(saved)).toEqual(["a.png", "c.pdf"]);
   });
 
+  it("drops an upload parked behind the URL tab", () => {
+    const parked = withParts([
+      { id: "p", kind: "image", source: "url", image: "http://x/b.png", parked: { image: "QUJD", fileName: "a.png" } },
+    ]);
+    const saved = JSON.parse(JSON.stringify(stripFileData(parked))) as Draft;
+    expect(saved.parts[0]).toEqual({
+      id: "p",
+      kind: "image",
+      source: "url",
+      image: "http://x/b.png",
+      parked: { image: "", fileName: "a.png" },
+    });
+    expect(JSON.stringify(saved)).not.toContain("QUJD");
+  });
+
+  it("keeps a URL parked behind the upload tab", () => {
+    const parked = withParts([
+      { id: "p", kind: "image", source: "upload", image: "QUJD", fileName: "a.png", parked: { image: "http://x/b.png" } },
+    ]);
+    expect(stripFileData(parked).parts[0].parked).toEqual({ image: "http://x/b.png" });
+  });
+
   it("keeps old history with file data loading without asking to pick files", () => {
     expect(filesToPick(draft)).toEqual([]);
   });
