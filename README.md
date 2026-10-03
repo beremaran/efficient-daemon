@@ -1,4 +1,8 @@
 <p align="center">
+  <img src="docs/assets/social-preview.png" alt="efficient-daemon: JSON that matches your schema, from any OpenAI-compatible model" width="820">
+</p>
+
+<p align="center">
   <a href="https://github.com/beremaran/efficient-daemon/actions/workflows/ci.yml"><img src="https://github.com/beremaran/efficient-daemon/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
   <a href="https://github.com/beremaran/efficient-daemon/releases/latest"><img src="https://img.shields.io/github/v/release/beremaran/efficient-daemon" alt="Latest release"></a>
   <a href="https://github.com/beremaran/efficient-daemon/pkgs/container/efficient-daemon"><img src="https://img.shields.io/badge/image-ghcr.io%2Fberemaran%2Fefficient--daemon-2496ED?logo=docker&logoColor=white" alt="Container image"></a>
