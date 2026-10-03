@@ -55,12 +55,15 @@ export function ResponsePanel({ state }: { state: RunState }) {
         )}
       </div>
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertTitle>Request failed</AlertTitle>
-          <AlertDescription className="break-words font-mono text-xs">{error}</AlertDescription>
-        </Alert>
-      )}
+      {/* Stays mounted so screen readers announce text changes. */}
+      <div role="alert" className="empty:-mb-3">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTitle>Request failed</AlertTitle>
+            <AlertDescription className="break-words font-mono text-xs">{error}</AlertDescription>
+          </Alert>
+        )}
+      </div>
 
       <Separator />
 
