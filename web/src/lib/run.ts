@@ -81,6 +81,11 @@ export function startElapsed(onTick: (elapsedMs: number) => void): () => void {
 
 export const elapsedLabel = (elapsedMs: number) => `${Math.floor(elapsedMs / 1000)} s`;
 
+// On one-column layouts the Response panel sits below the request cards; bring it into view.
+export const scrollToResponse = (el: Pick<HTMLElement, "scrollIntoView"> | null, wide: boolean) => {
+  if (!wide) el?.scrollIntoView({ behavior: "smooth", block: "start" });
+};
+
 export const runShortcutHint = (mac: boolean) => (mac ? "⌘↵" : "Ctrl+Enter");
 
 // Beats the default Mod-Enter (insert blank line), so the shortcut runs from inside editors too.

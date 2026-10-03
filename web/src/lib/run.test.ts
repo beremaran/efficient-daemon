@@ -3,7 +3,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
 import type { RunState } from "@/components/ResponsePanel";
-import { cardToggleClass, connectionMissing, connectionSummary, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, startElapsed, stoppedLabel, stoppedState, systemSummary, type KeyInfo, type RunInput } from "@/lib/run";
+import { cardToggleClass, connectionMissing, connectionSummary, elapsedLabel, isRunShortcut, runBlocker, runKeymap, runShortcutHint, scrollToResponse, startElapsed, stoppedLabel, stoppedState, systemSummary, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -138,6 +138,24 @@ describe("isRunShortcut", () => {
   it("ignores keys pressed inside an editor", () => {
     expect(isRunShortcut(key({ target: { tagName: "TEXTAREA" } }), true)).toBe(false);
     expect(isRunShortcut(key({ target: { tagName: "DIV", isContentEditable: true } }), true)).toBe(false);
+  });
+});
+
+describe("scrollToResponse", () => {
+  it("scrolls the Response panel into view on narrow screens", () => {
+    const el = { scrollIntoView: vi.fn() };
+    scrollToResponse(el, false);
+    expect(el.scrollIntoView).toHaveBeenCalledWith({ behavior: "smooth", block: "start" });
+  });
+
+  it("does not scroll on wide screens", () => {
+    const el = { scrollIntoView: vi.fn() };
+    scrollToResponse(el, true);
+    expect(el.scrollIntoView).not.toHaveBeenCalled();
+  });
+
+  it("accepts a missing element", () => {
+    expect(() => scrollToResponse(null, false)).not.toThrow();
   });
 });
 

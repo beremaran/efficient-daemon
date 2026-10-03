@@ -14,7 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
-import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
+import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, scrollToResponse, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import { errorMessage } from "@/lib/utils";
 import type { RunRecord, Settings } from "@/lib/types";
@@ -41,6 +41,7 @@ export default function App() {
   const [connectionOpen, setConnectionOpen] = useState(false);
   const [connectionDecided, setConnectionDecided] = useState(false);
   const abortController = useRef<AbortController | null>(null);
+  const responseSection = useRef<HTMLElement>(null);
 
   const effectiveSettings = useMemo(
     () => resolveSettings(draft.settings, serverDefaults),
@@ -130,6 +131,8 @@ export default function App() {
     const controller = new AbortController();
     abortController.current = controller;
     setRun({ ...IDLE_STATE, running: true, requestPreview });
+    // 1024px is Tailwind's lg, where the layout turns two-column.
+    scrollToResponse(responseSection.current, window.matchMedia("(min-width: 1024px)").matches);
     try {
       const res = await fetch("/ask", {
         method: "POST",
@@ -312,7 +315,7 @@ export default function App() {
           </Card>
         </section>
 
-        <section className="flex min-w-0 flex-1 flex-col lg:min-h-0">
+        <section ref={responseSection} className="flex min-w-0 flex-1 flex-col lg:min-h-0">
           <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col gap-3">
             <TabsList className="self-start">
               <TabsTrigger value="response">Response</TabsTrigger>
