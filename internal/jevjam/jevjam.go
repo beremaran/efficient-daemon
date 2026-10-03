@@ -27,6 +27,9 @@ import (
 const (
 	// DefaultMaxScoreLevels caps how many values a bounded integer may span.
 	DefaultMaxScoreLevels = 11
+	// MaxScoreLevelsLimit bounds max-score-levels, so no request can make a
+	// plan allocate an unbounded number of levels.
+	MaxScoreLevelsLimit = 64
 	// maxQuestions is jevjam's per-request question limit.
 	maxQuestions = 64
 	// maxResponseBytes bounds the jevjam reply read into memory.
@@ -60,13 +63,26 @@ type field struct {
 	question Question
 	// levels holds the integer value of each score level, low to high.
 	levels []int64
+	// mean picks the rounded expected level, which suits a numeric range;
+	// otherwise the most likely level wins, since labels are categories.
+	mean bool
 }
 
 // answer holds the fields of a jevjam answer that map back to a value.
+// Pointers tell a missing or null value apart from a real zero.
 type answer struct {
-	Choice string  `json:"choice"`
-	Score  float64 `json:"score"`
-	Noul   float64 `json:"noul"`
+	Choice        *string            `json:"choice"`
+	Score         *float64           `json:"score"`
+	Noul          *float64           `json:"noul"`
+	Probabilities map[string]float64 `json:"probabilities"`
+}
+
+// ValidateMaxScoreLevels checks a max-score-levels setting.
+func ValidateMaxScoreLevels(n int) error {
+	if n < 2 || n > MaxScoreLevelsLimit {
+		return fmt.Errorf("max-score-levels must be between 2 and %d", MaxScoreLevelsLimit)
+	}
+	return nil
 }
 
 // NewPlan translates a response schema into jevjam questions. The schema must
@@ -74,6 +90,9 @@ type answer struct {
 // minimum and maximum or oneOf consts spanning 2 to maxLevels values (score),
 // or a string with enum or oneOf consts (choice).
 func NewPlan(raw []byte, maxLevels int) (Plan, error) {
+	if err := ValidateMaxScoreLevels(maxLevels); err != nil {
+		return nil, err
+	}
 	var root struct {
 		Type       any                       `json:"type"`
 		Properties map[string]map[string]any `json:"properties"`
@@ -107,20 +126,30 @@ func newField(name string, prop map[string]any, maxLevels int) (field, error) {
 	case prop["type"] == "boolean":
 		q.Type = "noul"
 		return field{question: q}, nil
-	case prop["type"] == "integer" && prop["oneOf"] != nil:
-		options, _ := prop["oneOf"].([]any)
+	case prop["type"] == "integer" && (prop["oneOf"] != nil || prop["enum"] != nil):
+		keyword, options := "oneOf", prop["oneOf"]
+		if options == nil {
+			keyword, options = "enum", prop["enum"]
+		}
+		items, _ := options.([]any)
 		labels := map[int64]string{}
-		for _, option := range options {
-			item, _ := option.(map[string]any)
+		for _, option := range items {
+			item, ok := option.(map[string]any)
+			if !ok {
+				item = map[string]any{"const": option}
+			}
 			value, err := intKeyword(item, "const")
 			if err != nil {
-				return field{}, errors.New("every oneOf entry needs a whole-number const")
+				return field{}, fmt.Errorf("every %s entry needs a whole-number value", keyword)
+			}
+			if _, dup := labels[value]; dup {
+				return field{}, fmt.Errorf("%s lists %d twice", keyword, value)
 			}
 			description, _ := item["description"].(string)
 			labels[value] = cmp.Or(strings.TrimSpace(description), strconv.FormatInt(value, 10))
 		}
 		if len(labels) < 2 || len(labels) > maxLevels {
-			return field{}, fmt.Errorf("oneOf has %d values; jevjam allows 2 to %d (see max-score-levels)", len(labels), maxLevels)
+			return field{}, fmt.Errorf("%s has %d values; jevjam allows 2 to %d (see max-score-levels)", keyword, len(labels), maxLevels)
 		}
 		levels := slices.Sorted(maps.Keys(labels))
 		criteria := make([]string, len(levels))
@@ -145,7 +174,7 @@ func newField(name string, prop map[string]any, maxLevels int) (field, error) {
 			criteria[i] = strconv.FormatInt(levels[i], 10)
 		}
 		q.Type, q.Criteria = "score", criteria
-		return field{question: q, levels: levels}, nil
+		return field{question: q, levels: levels, mean: true}, nil
 	case prop["type"] == "string" && prop["enum"] != nil:
 		values, _ := prop["enum"].([]any)
 		labels := make([]string, 0, len(values))
@@ -170,6 +199,9 @@ func newField(name string, prop map[string]any, maxLevels int) (field, error) {
 			if !ok {
 				return field{}, errors.New("every oneOf entry needs a string const")
 			}
+			if _, dup := criteria[label]; dup {
+				return field{}, fmt.Errorf("oneOf lists %q twice", label)
+			}
 			description, _ := item["description"].(string)
 			criteria[label] = cmp.Or(strings.TrimSpace(description), label)
 		}
@@ -179,7 +211,7 @@ func newField(name string, prop map[string]any, maxLevels int) (field, error) {
 		q.Type, q.Criteria = "choice", criteria
 		return field{question: q}, nil
 	}
-	return field{}, errors.New("jevjam supports only boolean, bounded or oneOf integer, and string enum or oneOf properties")
+	return field{}, errors.New("jevjam supports only boolean, bounded, enum, or oneOf integer, and string enum or oneOf properties")
 }
 
 func intKeyword(prop map[string]any, key string) (int64, error) {
@@ -202,13 +234,23 @@ func (p Plan) values(answers map[string]answer) (json.RawMessage, error) {
 		if !ok {
 			return nil, fmt.Errorf("jevjam returned no answer for %q", name)
 		}
-		switch f.question.Type {
-		case "noul":
-			out[name] = a.Noul >= 0.5
-		case "score":
-			out[name] = f.levels[min(max(int(math.Round(a.Score)), 0), len(f.levels)-1)]
+		switch {
+		case f.question.Type == "noul" && a.Noul != nil:
+			out[name] = *a.Noul >= 0.5
+		case f.question.Type == "choice" && a.Choice != nil:
+			out[name] = *a.Choice
+		case f.question.Type == "score" && f.mean && a.Score != nil:
+			out[name] = f.levels[min(max(int(math.Round(*a.Score)), 0), len(f.levels)-1)]
+		case f.question.Type == "score" && !f.mean && len(a.Probabilities) == len(f.levels):
+			top := 0
+			for i := range f.levels {
+				if a.Probabilities[strconv.Itoa(i)] > a.Probabilities[strconv.Itoa(top)] {
+					top = i
+				}
+			}
+			out[name] = f.levels[top]
 		default:
-			out[name] = a.Choice
+			return nil, fmt.Errorf("jevjam returned no %s value for %q", f.question.Type, name)
 		}
 	}
 	return json.Marshal(out)

@@ -48,7 +48,7 @@ func buildSpec(version string) ([]byte, error) {
 			WithContent(openapi3.NewContentWithJSONSchema(schema)))
 	}
 	responses := openapi3.NewResponses(
-		jsonResponse("200", "Model output, validated against the request's schema. jevjam requests also return the raw answers as JSON in the X-Jevjam-Answers header.", outputSchema),
+		jsonResponse("200", "Model output, validated against the request's schema. A jevjam request with answers: true gets {result, answers} instead, where answers holds jevjam's raw answers.", outputSchema),
 		jsonResponse("400", "Invalid request body or media.", errorSchema),
 		jsonResponse("422", "Model output failed schema validation.", errorSchema),
 		jsonResponse("502", "Upstream LLM error.", errorSchema),

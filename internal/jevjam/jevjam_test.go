@@ -56,11 +56,59 @@ func TestNewPlanRejectsUnsupportedSchemas(t *testing.T) {
 		"nested object":   `{"type": "object", "properties": {"a": {"type": "object"}}}`,
 		"float const":     `{"type": "object", "properties": {"a": {"type": "integer", "oneOf": [{"const": 1.5}, {"const": 2}]}}}`,
 		"one int const":   `{"type": "object", "properties": {"a": {"type": "integer", "oneOf": [{"const": 1}]}}}`,
+		"dup int const":   `{"type": "object", "properties": {"a": {"type": "integer", "oneOf": [{"const": 1}, {"const": 2}, {"const": 1}]}}}`,
+		"dup str const":   `{"type": "object", "properties": {"a": {"type": "string", "oneOf": [{"const": "a"}, {"const": "b"}, {"const": "a"}]}}}`,
+		"float enum":      `{"type": "object", "properties": {"a": {"type": "integer", "enum": [1, 2.5]}}}`,
 	}
 	for name, raw := range tests {
 		if _, err := NewPlan([]byte(raw), DefaultMaxScoreLevels); err == nil {
 			t.Errorf("%s: expected an error", name)
 		}
+	}
+}
+
+func TestNewPlanIntegerEnum(t *testing.T) {
+	plan, err := NewPlan([]byte(`{"type": "object", "properties": {"a": {"type": "integer", "enum": [3, 1, 2]}}}`), DefaultMaxScoreLevels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := plan["a"].question.Criteria; !reflect.DeepEqual(got, []string{"1", "2", "3"}) {
+		t.Errorf("criteria = %v", got)
+	}
+}
+
+func TestNewPlanBoundsMaxLevels(t *testing.T) {
+	raw := []byte(`{"type": "object", "properties": {"a": {"type": "integer", "minimum": 0, "maximum": 9999999}}}`)
+	for _, n := range []int{-5, 1, MaxScoreLevelsLimit + 1, 1 << 30} {
+		if _, err := NewPlan(raw, n); err == nil {
+			t.Errorf("max levels %d: expected an error", n)
+		}
+	}
+}
+
+func TestValuesRejectsMissingAnswers(t *testing.T) {
+	plan, err := NewPlan([]byte(schema), DefaultMaxScoreLevels)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, raw := range []string{
+		`{"churn": {}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": {"score": 0}, "size": {"probabilities": {"0": 1, "1": 0, "2": 0}}}`,
+		`{"churn": {"noul": 0}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": null, "size": {"probabilities": {"0": 1, "1": 0, "2": 0}}}`,
+		`{"churn": {"noul": 0}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": {"score": 0}, "size": {"score": 0}}`,
+	} {
+		var answers map[string]answer
+		if err := json.Unmarshal([]byte(raw), &answers); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := plan.values(answers); err == nil {
+			t.Errorf("%s: expected an error", raw)
+		}
+	}
+	// Real zeros still count as answers.
+	var answers map[string]answer
+	_ = json.Unmarshal([]byte(`{"churn": {"noul": 0}, "team": {"choice": "billing"}, "tone": {"choice": "calm"}, "urgency": {"score": 0}, "size": {"probabilities": {"0": 1, "1": 0, "2": 0}}}`), &answers)
+	if result, err := plan.values(answers); err != nil || string(result) != `{"churn":false,"size":1,"team":"billing","tone":"calm","urgency":1}` {
+		t.Errorf("result = %s, err = %v", result, err)
 	}
 }
 
@@ -96,7 +144,7 @@ func TestAskMapsAnswersBack(t *testing.T) {
 			"tone": {"type": "choice", "choice": "angry"},
 			"urgency": {"type": "score", "score": 1.6},
 			"churn": {"type": "noul", "noul": 0.82},
-			"size": {"type": "score", "score": 0.9}
+			"size": {"type": "score", "score": 1.0, "probabilities": {"0": 0.5, "1": 0.0, "2": 0.5}}
 		}}`)
 	}))
 	defer server.Close()
@@ -115,7 +163,9 @@ func TestAskMapsAnswersBack(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if string(result) != `{"churn":true,"size":5,"team":"billing","tone":"angry","urgency":3}` {
+	// size splits its vote between its ends; the mean would pick 5, which
+	// got no votes, so the first top level wins instead.
+	if string(result) != `{"churn":true,"size":1,"team":"billing","tone":"angry","urgency":3}` {
 		t.Errorf("result = %s", result)
 	}
 	if !strings.Contains(string(answers), `"probabilities"`) {
