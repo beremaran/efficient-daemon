@@ -13,6 +13,15 @@ describe("SchemaPanel", () => {
     expect(html).not.toContain("height:300px");
   });
 
+  it("gives the editor a definite height to fill", () => {
+    const html = renderToStaticMarkup(
+      <SchemaPanel schema="{}" onSchemaChange={() => {}} lint={null} linting={false} runKeys={[]} />,
+    );
+    // The pane is a flex column, the border wrapper takes the rest, and the editor root fills the wrapper.
+    expect(html).toMatch(/id="[^"]*content-edit"[^>]*class="[^"]*\bflex\b[^"]*\bflex-col\b/);
+    expect(html).toMatch(/class="min-h-0 flex-1 [^"]*"><div class="[^"]*\bh-full\b/);
+  });
+
   it("marks a stale lint result without fading it below 4.5:1 contrast", () => {
     const html = renderToStaticMarkup(
       <SchemaPanel

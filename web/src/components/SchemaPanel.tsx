@@ -84,10 +84,11 @@ export function SchemaPanel({
         <LintStatus lint={lint} linting={linting} />
       </div>
 
-      <TabsContent value="edit" className="mt-2 min-h-[300px]">
-        <div className="h-full overflow-hidden rounded-md border">
+      <TabsContent value="edit" className="mt-2 flex min-h-[300px] flex-col">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
           <CodeMirror
             value={schema}
+            className="h-full"
             height="100%"
             minHeight="300px"
             extensions={[json(), runKeys]}
