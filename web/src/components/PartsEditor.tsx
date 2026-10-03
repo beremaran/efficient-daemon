@@ -5,11 +5,10 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_BODY_MB, readPartFile } from "@/lib/media";
-import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart } from "@/lib/parts";
+import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, switchImageSource } from "@/lib/parts";
 import { MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
@@ -232,22 +231,21 @@ function ImagePartEditor({
   onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
 }) {
-  const urlMode = part.source === "url";
+  const source = part.source === "url" ? "url" : "upload";
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
-        <Label className="text-xs text-muted-foreground">Upload</Label>
-        <Switch
-          checked={urlMode}
-          onCheckedChange={(v) => {
-            onError();
-            onChange({ source: v ? "url" : "upload", image: "", fileName: undefined });
-          }}
-          aria-label="toggle image URL mode"
-        />
-        <Label className="text-xs text-muted-foreground">http(s) URL</Label>
-      </div>
-      {urlMode ? (
+    <Tabs
+      value={source}
+      onValueChange={(v) => {
+        onError();
+        onChange(switchImageSource(part, v as "upload" | "url"));
+      }}
+      className="flex flex-col gap-2"
+    >
+      <TabsList className="self-start" aria-label="Image source">
+        <TabsTrigger value="upload">Upload</TabsTrigger>
+        <TabsTrigger value="url">URL</TabsTrigger>
+      </TabsList>
+      <TabsContent value="url">
         <Input
           value={part.image ?? ""}
           onChange={(e) => onChange({ image: e.target.value })}
@@ -255,7 +253,8 @@ function ImagePartEditor({
           spellCheck={false}
           autoFocus={autoFocus}
         />
-      ) : (
+      </TabsContent>
+      <TabsContent value="upload" className="flex flex-col gap-2">
         <FileInput
           accept="image/*"
           enforceImageCap
@@ -265,15 +264,15 @@ function ImagePartEditor({
           onError={onError}
           onFile={(b64, name) => onChange({ image: b64, fileName: name })}
         />
-      )}
-      {part.image && !urlMode && (
-        <img
-          src={`data:;base64,${part.image}`}
-          alt="uploaded preview"
-          className="max-h-32 w-auto rounded border"
-        />
-      )}
-    </div>
+        {part.image && (
+          <img
+            src={`data:;base64,${part.image}`}
+            alt="uploaded preview"
+            className="max-h-32 w-auto rounded border"
+          />
+        )}
+      </TabsContent>
+    </Tabs>
   );
 }
 

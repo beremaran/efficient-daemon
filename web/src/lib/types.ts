@@ -12,6 +12,8 @@ export interface Part {
   source?: "upload" | "url";
   /** Original filename for upload parts, display only. */
   fileName?: string;
+  /** The image value of the other source, kept while the Part shows this one. */
+  parked?: { image?: string; fileName?: string };
 }
 
 export interface Settings {

@@ -138,3 +138,27 @@ describe("undo notice", () => {
     expect(html).not.toContain("Undo");
   });
 });
+
+describe("image source choice", () => {
+  const html = renderToStaticMarkup(
+    <PartEditor
+      index={0}
+      part={{ ...newPart("image"), source: "upload" }}
+      count={1}
+      onError={() => {}}
+      onChange={() => {}}
+      onRemove={() => {}}
+      onMove={() => {}}
+    />,
+  );
+
+  it("offers Upload and URL as tabs, not a switch", () => {
+    expect(html).toContain(`role="tablist"`);
+    expect(html.match(/role="tab"/g)).toHaveLength(2);
+    expect(html).not.toContain(`role="switch"`);
+  });
+
+  it("selects the tab of the Part's source", () => {
+    expect(html).toMatch(/aria-selected="true"[^>]*data-state="active"[^>]*>Upload</);
+  });
+});

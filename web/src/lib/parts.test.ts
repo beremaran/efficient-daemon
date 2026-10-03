@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, withPartIds } from "@/lib/parts";
+import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, switchImageSource, withPartIds } from "@/lib/parts";
+import type { Part } from "@/lib/types";
 import { loadDraft } from "@/lib/store";
 
 const texts = (parts: { text?: string }[]) => parts.map((p) => p.text);
@@ -90,5 +91,25 @@ describe("undo remove", () => {
 
   it("puts the Part at the end when the list shrank", () => {
     expect(restorePart([a], file, 5)).toEqual([a, file]);
+  });
+});
+
+describe("switchImageSource", () => {
+  const apply = (part: Part, patch: Partial<Part>): Part => ({ ...part, ...patch });
+
+  it("keeps each source's value while switching back and forth", () => {
+    let part: Part = { ...newPart("image"), source: "upload", image: "AAAA", fileName: "cat.png" };
+    part = apply(part, switchImageSource(part, "url"));
+    expect(part).toMatchObject({ source: "url", image: "", fileName: undefined });
+    part = apply(part, { image: "https://example.com/a.png" });
+    part = apply(part, switchImageSource(part, "upload"));
+    expect(part).toMatchObject({ source: "upload", image: "AAAA", fileName: "cat.png" });
+    part = apply(part, switchImageSource(part, "url"));
+    expect(part).toMatchObject({ source: "url", image: "https://example.com/a.png" });
+  });
+
+  it("counts a parked upload as a file", () => {
+    const part: Part = { ...newPart("image"), source: "upload", image: "AAAA", fileName: "cat.png" };
+    expect(hasFile({ ...part, ...switchImageSource(part, "url") })).toBe(true);
   });
 });

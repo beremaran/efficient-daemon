@@ -18,9 +18,19 @@ export const withPartIds = (parts: Part[]): Part[] =>
 
 export const removePart = (parts: Part[], index: number): Part[] => parts.filter((_, i) => i !== index);
 
-/** True when the Part holds an uploaded file. */
+/** True when the Part holds an uploaded file, shown or parked. */
 export const hasFile = (part: Part): boolean =>
-  part.kind === "pdf" ? !!part.pdf : part.kind === "image" && part.source === "upload" && !!part.image;
+  part.kind === "pdf"
+    ? !!part.pdf
+    : part.kind === "image" && (part.source === "upload" ? !!part.image : !!part.parked?.image);
+
+/** Switches an image Part to `source`, swapping in the value it left there last time. */
+export const switchImageSource = (part: Part, source: "upload" | "url"): Partial<Part> => ({
+  source,
+  image: part.parked?.image ?? "",
+  fileName: part.parked?.fileName,
+  parked: { image: part.image, fileName: part.fileName },
+});
 
 /** Puts a removed Part back at `index`, or at the end if the list shrank. */
 export const restorePart = (parts: Part[], part: Part, index: number): Part[] =>
