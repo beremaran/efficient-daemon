@@ -6,7 +6,7 @@ function draft(settings: Partial<Settings> = {}, rest: Partial<Draft> = {}): Dra
   return {
     ...EMPTY_DRAFT,
     system: "be brief",
-    parts: [{ kind: "text", text: "hi" }],
+    parts: [{ id: "p1", kind: "text", text: "hi" }],
     ...rest,
     settings: {
       ...DEFAULT_SETTINGS,
@@ -58,11 +58,15 @@ describe("buildAskRequest", () => {
   it("measures the serialized body without inflating base64 again", () => {
     const image = "QUJD".repeat(1000);
     const request = buildAskRequest(
-      draft({}, { parts: [{ kind: "text", text: "héllo" }, { kind: "image", source: "upload", image }] }),
+      draft({}, { parts: [{ id: "p2", kind: "text", text: "héllo" }, { id: "p3", kind: "image", source: "upload", image }] }),
     );
     if (!request.ok) throw new Error(request.error);
     expect(request.bytes).toBe(new TextEncoder().encode(request.json).length);
     expect(request.bytes).toBeLessThan(image.length + 1000);
+  });
+
+  it("leaves Part ids out of the Ask request", () => {
+    expect(JSON.stringify(body(draft()).parts)).not.toContain("id");
   });
 
   it("returns an error for a blank or invalid schema", () => {
@@ -79,9 +83,9 @@ describe("cliArgs", () => {
       { provider: "openai" },
       {
         parts: [
-          { kind: "text", text: "it's" },
-          { kind: "image", source: "upload", image: "QUJD", fileName: "cat.png" },
-          { kind: "image", source: "url", image: "https://x/y.png" },
+          { id: "p4", kind: "text", text: "it's" },
+          { id: "p5", kind: "image", source: "upload", image: "QUJD", fileName: "cat.png" },
+          { id: "p6", kind: "image", source: "url", image: "https://x/y.png" },
         ],
       },
     );

@@ -1,6 +1,8 @@
 // Domain types mirroring the server's POST /ask body, plus shared UI types.
 
 export interface Part {
+  /** Stable across add, move and remove; the Ask request drops it. */
+  id: string;
   kind: "text" | "image" | "pdf";
   text?: string;
   /** base64 (no data: prefix) when source=upload, else an http(s) URL. */
@@ -10,6 +12,8 @@ export interface Part {
   source?: "upload" | "url";
   /** Original filename for upload parts, display only. */
   fileName?: string;
+  /** The image value of the other source, kept while the Part shows this one. */
+  parked?: { image?: string; fileName?: string };
 }
 
 export interface Settings {
@@ -89,6 +93,6 @@ export const DEFAULT_SCHEMA = `{
 export const EMPTY_DRAFT: Draft = {
   settings: { ...DEFAULT_SETTINGS },
   system: "",
-  parts: [{ kind: "text", text: "" }],
+  parts: [{ id: "initial-part", kind: "text", text: "" }],
   schema: DEFAULT_SCHEMA,
 };
