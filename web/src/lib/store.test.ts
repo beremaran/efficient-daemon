@@ -71,4 +71,11 @@ describe("API key storage", () => {
     localStorage.setItem("efficient-daemon.history.v2", JSON.stringify([record]));
     expect(loadHistory()[0].draft.settings.apiKey).toBe("");
   });
+
+  it("removes the key from stored history on load", () => {
+    const record = { at: 1, draft: withKey } as RunRecord;
+    localStorage.setItem("efficient-daemon.history.v2", JSON.stringify([record]));
+    loadHistory();
+    expect(localStorage.getItem("efficient-daemon.history.v2")).not.toContain("sk-secret");
+  });
 });

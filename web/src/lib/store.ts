@@ -84,8 +84,11 @@ export function loadHistory(): RunRecord[] {
     // v1 records held the request body, not the Draft; drop them.
     localStorage.removeItem("efficient-daemon.history.v1");
     const raw = localStorage.getItem(HISTORY_KEY);
-    // Older records kept the API key with the Draft; drop it.
-    return raw ? (JSON.parse(raw) as RunRecord[]).map(withoutKey) : [];
+    if (!raw) return [];
+    // Older records kept the API key with the Draft; drop it, in storage too.
+    const records = (JSON.parse(raw) as RunRecord[]).map(withoutKey);
+    if (JSON.stringify(records) !== raw) saveHistory(records);
+    return records;
   } catch {
     return [];
   }
