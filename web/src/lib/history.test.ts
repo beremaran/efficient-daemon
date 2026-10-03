@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { filesToPick, promptPreview, stripFileData } from "@/lib/history";
+import { hasFile } from "@/lib/parts";
 import { EMPTY_DRAFT, type Draft, type Part } from "@/lib/types";
 
 const withParts = (parts: Part[]) => ({ ...EMPTY_DRAFT, parts });
@@ -54,6 +55,14 @@ describe("history files", () => {
       parked: { image: "", fileName: "a.png" },
     });
     expect(JSON.stringify(saved)).not.toContain("QUJD");
+  });
+
+  it("restores a Part that holds no file", () => {
+    const parked = withParts([
+      { id: "p", kind: "image", source: "url", image: "http://x/b.png", parked: { image: "QUJD", fileName: "a.png" } },
+    ]);
+    expect(hasFile(parked.parts[0])).toBe(true);
+    expect(hasFile(stripFileData(parked).parts[0])).toBe(false);
   });
 
   it("keeps a URL parked behind the upload tab", () => {
