@@ -23,3 +23,15 @@ describe("ResponsePanel error alert", () => {
     expect(html).toMatch(/<div role="alert"[^>]*><\/div>/);
   });
 });
+
+describe("ResponsePanel run badge", () => {
+  it.each([
+    ["idle", base, "No run yet."],
+    ["running", { ...base, running: true }, "Running…"],
+    ["done", { ...base, status: 200 }, "HTTP 200"],
+    ["failed", { ...base, status: 500 }, "HTTP 500"],
+  ])("puts the %s badge inside role=status", (_, state, text) => {
+    const html = renderToStaticMarkup(<ResponsePanel state={state} />);
+    expect(html).toMatch(new RegExp(`<div role="status"[^>]*>.*${text}`));
+  });
+});

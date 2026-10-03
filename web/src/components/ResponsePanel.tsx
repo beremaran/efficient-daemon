@@ -27,26 +27,29 @@ export function ResponsePanel({ state }: { state: RunState }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
-        {running ? (
-          <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running…</Badge>
-        ) : cancelled ? (
-          <Badge variant="outline">Stopped</Badge>
-        ) : status !== null ? (
-          <>
-            <Badge
-              className={
-                status >= 200 && status < 300
-                  ? "border-emerald-600/30 bg-emerald-50 text-emerald-700"
-                  : "border-destructive/30 bg-destructive/10 text-destructive"
-              }
-            >
-              HTTP {status}
-            </Badge>
-            {latencyMs !== null && <span className="text-xs text-muted-foreground">{latencyMs} ms</span>}
-          </>
-        ) : (
-          <span className="text-muted-foreground">No run yet.</span>
-        )}
+        {/* Stays mounted so screen readers announce the badge text. */}
+        <div role="status" className="flex items-center gap-2">
+          {running ? (
+            <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running…</Badge>
+          ) : cancelled ? (
+            <Badge variant="outline">Stopped</Badge>
+          ) : status !== null ? (
+            <>
+              <Badge
+                className={
+                  status >= 200 && status < 300
+                    ? "border-emerald-600/30 bg-emerald-50 text-emerald-700"
+                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                }
+              >
+                HTTP {status}
+              </Badge>
+              {latencyMs !== null && <span className="text-xs text-muted-foreground">{latencyMs} ms</span>}
+            </>
+          ) : (
+            <span className="text-muted-foreground">No run yet.</span>
+          )}
+        </div>
         <span className="flex-1" />
         {responseText && (
           <Button variant="ghost" size="sm" onClick={() => copyText(responseText)}>
