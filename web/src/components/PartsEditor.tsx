@@ -4,6 +4,7 @@ import { ArrowDown, ArrowUp, FileText, Image as ImageIcon, Plus, Trash2, Type } 
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
@@ -226,15 +227,15 @@ export function PartEditor({
           <span className="capitalize">{part.kind === "pdf" ? "PDF" : part.kind}</span>
         </CardTitle>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => onMove(-1)} disabled={index === 0} aria-label={`Move part ${index + 1} up`}>
+          <IconButton onClick={() => onMove(-1)} disabled={index === 0} label={`Move part ${index + 1} up`}>
             <ArrowUp />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onMove(1)} disabled={index === count - 1} aria-label={`Move part ${index + 1} down`}>
+          </IconButton>
+          <IconButton onClick={() => onMove(1)} disabled={index === count - 1} label={`Move part ${index + 1} down`}>
             <ArrowDown />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onRemove} data-remove aria-label={`Remove part ${index + 1}`}>
+          </IconButton>
+          <IconButton onClick={onRemove} data-remove label={`Remove part ${index + 1}`}>
             <Trash2 />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>
