@@ -28,3 +28,8 @@ export async function lintSchema(body: string): Promise<LintResult> {
     };
   }
 }
+
+/** The result to show while a check runs: the last one, marked out of date. */
+export function lintView(lint: LintResult | null, linting: boolean) {
+  return { errors: lint?.errors ?? [], warnings: lint?.warnings ?? [], stale: !!lint && linting };
+}

@@ -13,7 +13,7 @@ import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { buildAskRequest, lintBody } from "@/lib/ask";
-import { lintSchema, type LintResult } from "@/lib/lint";
+import { lintSchema, lintView, type LintResult } from "@/lib/lint";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -91,7 +91,7 @@ export default function App() {
 
   const requestPreview = request.ok ? request.json : "{}";
 
-  const lintErrors = lint && !linting ? lint.errors : [];
+  const lintErrors = lintView(lint, linting).errors;
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
   const jevjam = effectiveSettings.provider === "jevjam";
@@ -190,7 +190,7 @@ export default function App() {
       <Header
         canRun={canRun}
         running={run.running}
-        lintIssues={lintIssuesCount(lint, linting)}
+        lintIssues={lintErrors.length}
         onRun={runRequest}
         onStop={() => abortController.current?.abort()}
       />
@@ -324,11 +324,6 @@ function Header({
       )}
     </header>
   );
-}
-
-function lintIssuesCount(lint: LintResult | null, linting: boolean): number {
-  if (!lint || linting) return 0;
-  return lint.errors.length;
 }
 
 function safeParse(text: string): unknown {
