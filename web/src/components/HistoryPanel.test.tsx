@@ -13,7 +13,7 @@ const record: RunRecord = {
   status: 200,
   latencyMs: 5,
   model: "gpt-test",
-  draft: { ...EMPTY_DRAFT, parts: [{ kind: "text", text: "Summarise this page" }] },
+  draft: { ...EMPTY_DRAFT, parts: [{ id: "p", kind: "text", text: "Summarise this page" }] },
   response: null,
   responseText: "",
   error: null,

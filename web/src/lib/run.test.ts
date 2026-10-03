@@ -13,7 +13,7 @@ function input(over: Partial<RunInput> = {}): RunInput {
     model: "gpt",
     baseURL: "http://llm",
     jevjam: false,
-    parts: [{ kind: "text", text: "hi" }],
+    parts: [{ id: "p", kind: "text", text: "hi" }],
     request: okRequest,
     lint: okLint,
     checking: false,
@@ -44,7 +44,7 @@ describe("runBlocker", () => {
   });
 
   it("treats blank Parts as missing", () => {
-    expect(runBlocker(input({ parts: [{ kind: "text", text: "  " }, { kind: "image", image: "" }] }))).toBe(
+    expect(runBlocker(input({ parts: [{ id: "p", kind: "text", text: "  " }, { id: "p", kind: "image", image: "" }] }))).toBe(
       "Add a Part to the user message",
     );
   });

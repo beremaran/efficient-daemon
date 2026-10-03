@@ -7,7 +7,7 @@ import source from "@/components/SchemaPanel.tsx?raw";
 describe("SchemaPanel", () => {
   it("lets the editor pane grow with a 300 px floor", () => {
     const html = renderToStaticMarkup(
-      <SchemaPanel schema="{}" onSchemaChange={() => {}} lint={null} linting={false} />,
+      <SchemaPanel schema="{}" onSchemaChange={() => {}} lint={null} linting={false} runKeys={[]} />,
     );
     expect(html).toMatch(/class="[^"]*\bflex-1\b[^"]*\bmin-h-\[300px\]/);
     expect(html).not.toContain("height:300px");

@@ -37,6 +37,6 @@ describe("nested tab sets", () => {
       error: null,
       requestPreview: "{}",
     };
-    expect(renderToStaticMarkup(<ResponsePanel state={state} />)).toContain('data-variant="line"');
+    expect(renderToStaticMarkup(<ResponsePanel state={state} runKeys={[]} />)).toContain('data-variant="line"');
   });
 });
