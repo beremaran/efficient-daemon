@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -30,11 +32,12 @@ function SelectField({
   onChange: (v: string) => void;
   serverDefault: string;
 }) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger id={id} className="w-full">
           <SelectValue placeholder={serverDefault ? `server default (${serverDefault})` : "server default"} />
         </SelectTrigger>
         <SelectContent>
