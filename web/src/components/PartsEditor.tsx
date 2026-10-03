@@ -202,13 +202,17 @@ export function PartEditor({
   useEffect(() => {
     current.current = part;
   });
+  // A file read can end after the user left the Upload tab; the file then goes to Upload, not over the URL.
+  const place = (kind: "image" | "pdf", base64: string, name: string) => {
+    const loaded = kind === "image" ? { image: base64, fileName: name } : { pdf: base64, fileName: name };
+    const { current: now } = current;
+    onChange(kind === "image" && now.source === "url" ? { ...switchImageSource(now, "upload"), ...loaded } : loaded);
+  };
   const load = async (kind: "image" | "pdf", file: File) => {
     const result = await readDroppedFile(kind, file);
     if ("message" in result) return onError(result.message);
     onError();
-    const loaded = kind === "image" ? { image: result.base64, fileName: file.name } : { pdf: result.base64, fileName: file.name };
-    const { current: now } = current;
-    onChange(kind === "image" && now.source === "url" ? { ...switchImageSource(now, "upload"), ...loaded } : loaded);
+    place(kind, result.base64, file.name);
   };
   const accepts = (e: React.DragEvent) => kind !== undefined && dragHasFiles(e.dataTransfer);
   return (
@@ -268,7 +272,7 @@ export function PartEditor({
             autoFocus={autoFocus}
           />
         )}
-        {part.kind === "image" && <ImagePartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} />}
+        {part.kind === "image" && <ImagePartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} onFile={(b64, name) => place("image", b64, name)} />}
         {part.kind === "pdf" && <PdfPartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} />}
       </CardContent>
     </Card>
@@ -281,12 +285,14 @@ function ImagePartEditor({
   autoFocus,
   onError,
   onChange,
+  onFile,
 }: {
   part: Part;
   error?: string;
   autoFocus?: boolean;
   onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
+  onFile: (base64: string, name: string) => void;
 }) {
   const source = part.source === "url" ? "url" : "upload";
   return (
@@ -318,7 +324,7 @@ function ImagePartEditor({
           fileName={part.fileName}
           autoFocus={autoFocus}
           onError={onError}
-          onFile={(b64, name) => onChange({ image: b64, fileName: name })}
+          onFile={onFile}
         />
         {part.image && (
           <img

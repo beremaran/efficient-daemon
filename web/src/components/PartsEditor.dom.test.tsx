@@ -13,11 +13,15 @@ let finishRead: (base64: string) => void;
 let failRead: (message: string) => void;
 vi.mock("@/lib/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/media")>()),
-  readDroppedFile: () => new Promise((resolve) => {
-      finishRead = (base64) => resolve({ base64 });
-      failRead = (message) => resolve({ message });
-    }),
+  readDroppedFile: () => pendingRead(),
+  readPartFile: () => pendingRead(),
 }));
+function pendingRead() {
+  return new Promise((resolve) => {
+    finishRead = (base64) => resolve({ base64 });
+    failRead = (message) => resolve({ message });
+  });
+}
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
@@ -143,5 +147,20 @@ describe("a file dropped on a Part", () => {
     await act(async () => finishRead("AAAA"));
     expect(host.querySelectorAll("[data-part-id]")).toHaveLength(1);
     expect(host.textContent).not.toContain("cat.png");
+  });
+});
+
+describe("a file picked for an image Part", () => {
+  it("goes to Upload, not over the URL, when the tab changed during the read", async () => {
+    const image = { ...newPart("image"), source: "upload" as const };
+    mount([image]);
+    const input = host.querySelector<HTMLInputElement>("input[type=file]")!;
+    Object.defineProperty(input, "files", { value: [new File(["x"], "cat.png")] });
+    act(() => void input.dispatchEvent(new Event("change", { bubbles: true })));
+    const tab = (name: string) => [...host.querySelectorAll<HTMLElement>('[role="tab"]')].find((t) => t.textContent === name)!;
+    act(() => void tab("URL").dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    await act(async () => finishRead("AAAA"));
+    expect(tab("Upload").getAttribute("aria-selected")).toBe("true");
+    expect(host.textContent).toContain("cat.png");
   });
 });
