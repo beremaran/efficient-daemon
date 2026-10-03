@@ -17,9 +17,13 @@ make build
 cd web && npm ci && npm run lint && npm run build
 ```
 
-The workbench output is embedded by Go and committed under `internal/workbench/dist`. Regenerate it with `make build-web` when changing `web/`.
+The workbench output is embedded by Go and committed under `internal/workbench/dist`. Regenerate it with `make build-web` when changing `web/`. The build strips WebAssembly debug sections so local build paths stay out of it.
 
-After changing Go or npm dependencies, refresh the third-party license inventory with `make licenses` and commit the updated `THIRD_PARTY_LICENSES/` files and `THIRD_PARTY_NOTICES.md`.
+After changing Go or npm dependencies, refresh the third-party license inventory with `make licenses` and commit the updated `THIRD_PARTY_LICENSES/` files and `THIRD_PARTY_NOTICES.md`. The workbench serves the notices at `/THIRD_PARTY_NOTICES.md`, and release archives include them.
+
+## Releases
+
+Pushing a `vX.Y.Z` tag builds release archives for Linux, macOS, and Windows and publishes a GitHub release. Each push to `main` and each tag also publishes a container image; see [docs/docker.md](docs/docker.md#image-tags).
 
 ## Pull requests
 

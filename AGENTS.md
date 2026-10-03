@@ -10,6 +10,7 @@ context files, `schema` validates JSON Schema, `server` exposes the HTTP API,
 their packages as `*_test.go` files. The React/Vite workbench source is in
 `web/src`; its built files are committed in `internal/workbench/dist` and
 embedded by Go. `context.schema.json` is the checked-in context-file schema;
+User guides live in `docs/`; keep `README.md` short and link to them.
 `bin/` contains ignored local binaries.
 
 ## Build, Test, and Development Commands

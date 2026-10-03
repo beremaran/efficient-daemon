@@ -6,9 +6,7 @@ Only the latest tagged release receives security fixes. This project has no serv
 
 ## Reporting a vulnerability
 
-Please email [berke@beremaran.com](mailto:berke@beremaran.com) with the affected version, impact, and steps to reproduce. Do not report security issues in public issues or pull requests. Please avoid including secrets or real user data in the report.
-
-If GitHub private vulnerability reporting is enabled after the repository becomes public, it may also be used. Until then, use email.
+Please use GitHub's [private vulnerability reporting](https://github.com/beremaran/efficient-daemon/security/advisories/new), or email [berke@beremaran.com](mailto:berke@beremaran.com), with the affected version, impact, and steps to reproduce. Do not report security issues in public issues or pull requests. Please avoid including secrets or real user data in the report.
 
 ## Deployment notes
 
