@@ -16,3 +16,16 @@ describe("ConnectionPanel selects", () => {
     }
   });
 });
+
+describe("ConnectionPanel API key", () => {
+  it("hides the key and turns autocomplete off", () => {
+    const html = renderToStaticMarkup(
+      <ConnectionPanel settings={DEFAULT_SETTINGS} onChange={() => {}} serverDefaults={{}} />,
+    );
+    const id = /<label[^>]*for="([^"]*)"[^>]*>API key<\/label>/.exec(html)?.[1];
+    expect(id).toBeTruthy();
+    const input = new RegExp(`<input[^>]*id="${id}"[^>]*>`).exec(html)?.[0];
+    expect(input).toContain('type="password"');
+    expect(input).toContain('autoComplete="off"');
+  });
+});

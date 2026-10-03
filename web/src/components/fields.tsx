@@ -75,6 +75,7 @@ export function TextField({
   onChange,
   placeholder,
   type = "text",
+  autoComplete,
   className,
 }: {
   label: string;
@@ -82,6 +83,7 @@ export function TextField({
   onChange: (v: string) => void;
   placeholder?: string;
   type?: string;
+  autoComplete?: string;
   className?: string;
 }) {
   const id = useId();
@@ -91,6 +93,7 @@ export function TextField({
       <Input
         id={id}
         type={type ?? "text"}
+        autoComplete={autoComplete}
         value={value}
         placeholder={placeholder ?? "server default"}
         onChange={(e) => onChange(e.target.value)}

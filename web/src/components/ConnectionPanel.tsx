@@ -94,6 +94,8 @@ export function ConnectionPanel({
         value={settings.apiKey}
         onChange={(apiKey) => patch({ apiKey })}
         placeholder="optional; may be supplied by the server"
+        type="password"
+        autoComplete="off"
       />
       <TextField
         label="Timeout"
