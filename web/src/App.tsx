@@ -13,7 +13,7 @@ import { SCHEMA_CARD_ID, SchemaIssuesLink } from "@/components/SchemaIssuesLink"
 import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
-import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
+import { askFromDraft, lintBody, resolveSettings, snapshotDraftForHistory } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
 import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, scrollToResponse, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
 import { withPartIds } from "@/lib/parts";
@@ -60,8 +60,13 @@ export default function App() {
   );
   // Lint re-runs only when the schema, provider or max score levels change.
   const lintInput = request.ok ? JSON.stringify(lintBody(request.body)) : null;
+  const lintErrorInput = request.ok ? null : request.error;
+  const lintValues = useMemo<[string | null, string | null]>(
+    () => [lintInput, lintErrorInput],
+    [lintInput, lintErrorInput],
+  );
   const [lintJSON, lintError] = useDebounced<[string | null, string | null]>(
-    [lintInput, request.ok ? null : request.error],
+    lintValues,
     300,
   );
 
@@ -77,6 +82,10 @@ export default function App() {
           reasoningEffort: cfg["reasoning-effort"] ?? "",
           timeout: prettyDuration(cfg.timeout ?? ""),
           provider: cfg.provider ?? "",
+          temperature: cfg.temperature == null ? "" : String(cfg.temperature),
+          temperatureEnabled: cfg.temperature != null,
+          maxTokens: cfg["max-tokens"] == null ? "" : String(cfg["max-tokens"]),
+          maxTokensEnabled: cfg["max-tokens"] != null,
           maxScoreLevels: String(cfg["max-score-levels"] ?? ""),
         });
       })
@@ -140,6 +149,10 @@ export default function App() {
       return;
     }
     const { body } = latest;
+    // History resolves server defaults now so Restore keeps the request's
+    // effective settings even if the daemon configuration changes later.
+    const historyDraft = snapshotDraftForHistory(draft, body, serverDefaults);
+    const historyModel = historyDraft.settings.model.trim() || "server default";
     const requestPreview = latest.json;
     const startedAt = Date.now();
     const controller = new AbortController();
@@ -189,8 +202,8 @@ export default function App() {
         at: startedAt,
         status: res.status,
         latencyMs,
-        model: model || "server default",
-        draft,
+        model: historyModel,
+        draft: historyDraft,
         response: safeParse(text),
         responseText: text,
         error: res.ok ? null : text,
@@ -214,8 +227,8 @@ export default function App() {
         at: startedAt,
         status: null,
         latencyMs: null,
-        model: model || "server default",
-        draft,
+        model: historyModel,
+        draft: historyDraft,
         response: null,
         responseText: "",
         error: message,

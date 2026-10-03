@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askFromDraft, buildAskRequest, cliArgs, lintBody, prettyJson } from "@/lib/ask";
+import { askFromDraft, buildAskRequest, cliArgs, lintBody, prettyJson, snapshotDraftForHistory } from "@/lib/ask";
 import { DEFAULT_SETTINGS, EMPTY_DRAFT, type Draft, type Settings } from "@/lib/types";
 
 function draft(settings: Partial<Settings> = {}, rest: Partial<Draft> = {}): Draft {
@@ -119,6 +119,137 @@ describe("askFromDraft", () => {
   it("fills empty settings from server defaults", () => {
     const request = askFromDraft(draft({ model: "", provider: "" }), { provider: "openai", model: "srv" });
     expect(request.ok && request.body.model).toBe("srv");
+  });
+});
+
+describe("snapshotDraftForHistory", () => {
+  it("materializes current server defaults without changing the Ask body", () => {
+    const original = draft(
+      {
+        apiKey: "sk-secret",
+        provider: "",
+        model: "",
+        baseURL: "",
+        reasoningEffort: "",
+        temperatureEnabled: false,
+        temperature: "0.7",
+        maxTokensEnabled: false,
+        maxTokens: "",
+        timeout: "",
+      },
+      {
+        parts: [{ id: "upload-part", kind: "image", image: "QUJD", source: "upload", fileName: "cat.png" }],
+      },
+    );
+    const defaults: Partial<Settings> = {
+      provider: "openai",
+      model: "server-model",
+      baseURL: "https://llm.example",
+      reasoningEffort: "medium",
+      temperature: "0.4",
+      temperatureEnabled: true,
+      maxTokens: "640",
+      maxTokensEnabled: true,
+      timeout: "15s",
+    };
+    const request = askFromDraft(original, defaults);
+    if (!request.ok) throw new Error(request.error);
+
+    expect(request.body).not.toHaveProperty("temperature");
+    expect(request.body).not.toHaveProperty("max-tokens");
+    expect(request.body).not.toHaveProperty("reasoning-effort");
+    expect(request.body).not.toHaveProperty("timeout");
+
+    const snapshot = snapshotDraftForHistory(original, request.body, defaults);
+    expect(snapshot.settings).toMatchObject({
+      provider: "openai",
+      model: "server-model",
+      baseURL: "https://llm.example",
+      apiKey: "",
+      reasoningEffort: "medium",
+      temperatureEnabled: true,
+      temperature: "0.4",
+      maxTokensEnabled: true,
+      maxTokens: "640",
+      timeout: "15s",
+    });
+    expect(snapshot.parts).toEqual(original.parts);
+
+    const restored = askFromDraft(snapshot, {
+      provider: "openai",
+      model: "changed-server-model",
+      baseURL: "https://changed.example",
+      reasoningEffort: "high",
+      temperatureEnabled: true,
+      temperature: "1",
+      maxTokensEnabled: true,
+      maxTokens: "999",
+      timeout: "45s",
+    });
+    expect(restored.ok && restored.body).toMatchObject({
+      model: "server-model",
+      "base-url": "https://llm.example",
+      "reasoning-effort": "medium",
+      temperature: 0.4,
+      "max-tokens": 640,
+      timeout: "15s",
+    });
+    expect(restored.ok && restored.body).not.toHaveProperty("api-key");
+  });
+
+  it("keeps sampling settings unset when the server reports no defaults", () => {
+    const original = draft({
+      temperatureEnabled: false,
+      maxTokensEnabled: false,
+      reasoningEffort: "",
+      timeout: "",
+    });
+    const request = askFromDraft(original, { provider: "openai" });
+    if (!request.ok) throw new Error(request.error);
+
+    const snapshot = snapshotDraftForHistory(original, request.body, { provider: "openai" });
+    expect(snapshot.settings).toMatchObject({
+      temperatureEnabled: false,
+      maxTokensEnabled: false,
+      reasoningEffort: "",
+      timeout: "",
+    });
+  });
+
+  it("preserves parked OpenAI settings for a jevjam run", () => {
+    const original = draft({
+      provider: "jevjam",
+      reasoningEffort: "low",
+      temperatureEnabled: true,
+      temperature: "0.3",
+      maxTokensEnabled: true,
+      maxTokens: "120",
+      maxScoreLevels: "",
+    });
+    const defaults: Partial<Settings> = {
+      provider: "jevjam",
+      reasoningEffort: "high",
+      temperatureEnabled: true,
+      temperature: "0.8",
+      maxTokensEnabled: true,
+      maxTokens: "900",
+      maxScoreLevels: "12",
+    };
+    const request = askFromDraft(original, defaults);
+    if (!request.ok) throw new Error(request.error);
+    expect(request.body).not.toHaveProperty("reasoning-effort");
+    expect(request.body).not.toHaveProperty("temperature");
+    expect(request.body).not.toHaveProperty("max-tokens");
+
+    const snapshot = snapshotDraftForHistory(original, request.body, defaults);
+    expect(snapshot.settings).toMatchObject({
+      reasoningEffort: "low",
+      temperatureEnabled: true,
+      temperature: "0.3",
+      maxTokensEnabled: true,
+      maxTokens: "120",
+      maxScoreLevels: "12",
+    });
   });
 });
 

@@ -62,6 +62,54 @@ export function askFromDraft(draft: Draft, serverDefaults: Partial<Settings>): A
   return buildAskRequest({ ...draft, settings: resolveSettings(draft.settings, serverDefaults) });
 }
 
+/** Copies the Draft for history with the settings that resolved for this run. */
+export function snapshotDraftForHistory(
+  draft: Draft,
+  body: AskBody,
+  serverDefaults: Partial<Settings>,
+): Draft {
+  const resolved = resolveSettings(draft.settings, serverDefaults);
+  const jevjam = String(body.provider ?? resolved.provider) === "jevjam";
+  const serverTemperature = serverDefaults.temperatureEnabled ?? Boolean(serverDefaults.temperature?.trim());
+  const serverMaxTokens = serverDefaults.maxTokensEnabled ?? Boolean(serverDefaults.maxTokens?.trim());
+
+  return {
+    ...draft,
+    settings: {
+      ...resolved,
+      provider: String(body.provider ?? resolved.provider),
+      model: String(body.model ?? resolved.model),
+      baseURL: String(body["base-url"] ?? resolved.baseURL),
+      apiKey: "",
+      // Preserve the hidden provider-specific controls as they were in the
+      // Draft; they did not participate in a jevjam run (or vice versa).
+      reasoningEffort: jevjam
+        ? draft.settings.reasoningEffort
+        : String(body["reasoning-effort"] ?? serverDefaults.reasoningEffort ?? draft.settings.reasoningEffort),
+      temperatureEnabled: jevjam
+        ? draft.settings.temperatureEnabled
+        : body.temperature !== undefined || serverTemperature || draft.settings.temperatureEnabled,
+      temperature: String(
+        jevjam
+          ? draft.settings.temperature
+          : body.temperature ?? (serverTemperature ? serverDefaults.temperature : undefined) ?? draft.settings.temperature,
+      ),
+      maxTokensEnabled: jevjam
+        ? draft.settings.maxTokensEnabled
+        : body["max-tokens"] !== undefined || serverMaxTokens || draft.settings.maxTokensEnabled,
+      maxTokens: String(
+        jevjam
+          ? draft.settings.maxTokens
+          : body["max-tokens"] ?? (serverMaxTokens ? serverDefaults.maxTokens : undefined) ?? draft.settings.maxTokens,
+      ),
+      timeout: String(body.timeout ?? serverDefaults.timeout ?? draft.settings.timeout),
+      maxScoreLevels: jevjam
+        ? String(body["max-score-levels"] ?? serverDefaults.maxScoreLevels ?? draft.settings.maxScoreLevels)
+        : draft.settings.maxScoreLevels,
+    },
+  };
+}
+
 /** The POST /schema/lint body: the Ask request fields that change lint results. */
 export function lintBody(body: AskBody): AskBody {
   return { schema: body.schema, provider: body.provider, "max-score-levels": body["max-score-levels"] };

@@ -44,7 +44,7 @@ export interface RunRecord {
   status: number | null;
   latencyMs: number | null;
   model: string;
-  /** The raw Draft that ran; restore puts it back as-is. */
+  /** The Draft snapshot for this run; parts keep UI metadata and settings capture resolved defaults. */
   draft: Draft;
   response: unknown;
   responseText: string;

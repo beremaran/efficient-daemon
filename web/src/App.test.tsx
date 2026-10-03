@@ -1,5 +1,5 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { act, Profiler } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -40,10 +40,12 @@ let host: HTMLDivElement;
 let root: Root;
 let lintCalls: ((ok: boolean) => void)[];
 let asked: string[];
+let config: Record<string, unknown>;
 
 beforeEach(() => {
   localStorage.clear();
   localStorage.setItem("efficient-daemon.draft.v1", JSON.stringify(jevjam));
+  config = {};
   defer.frozen = false;
   lintCalls = [];
   asked = [];
@@ -51,6 +53,7 @@ beforeEach(() => {
   vi.stubGlobal(
     "fetch",
     vi.fn(async (url: string, init?: RequestInit) => {
+      if (url === "/config") return Response.json(config);
       if (url === "/schema/lint") {
         await new Promise<boolean>((resolve) => lintCalls.push(resolve));
         return Response.json({ valid: true, errors: [], warnings: [] });
@@ -94,9 +97,77 @@ describe("Run", () => {
     await act(async () => button("Run")!.click());
     expect(JSON.parse(asked[0]).parts).toEqual([{ text: "old and new" }]);
   });
+
+  it("stores the effective settings while leaving server-default fields out of the Ask body", async () => {
+    const original: Draft = {
+      ...EMPTY_DRAFT,
+      settings: { ...EMPTY_DRAFT.settings, apiKey: "sk-secret", provider: "" },
+      parts: [{ id: "uploaded-image", kind: "image", image: "QUJD", source: "upload", fileName: "diagram.png" }],
+    };
+    localStorage.setItem("efficient-daemon.draft.v1", JSON.stringify(original));
+    config = {
+      provider: "openai",
+      model: "server-model",
+      "base-url": "https://llm.example",
+      "reasoning-effort": "medium",
+      temperature: 0,
+      "max-tokens": 640,
+      timeout: "15s",
+      "max-score-levels": 8,
+    };
+
+    await mount();
+    await settle(350);
+    await finishLint(lintCalls.length - 1);
+    expect(button("Run")!.disabled).toBe(false);
+    await act(async () => button("Run")!.click());
+
+    const request = JSON.parse(asked[0]);
+    expect(request.model).toBe("server-model");
+    expect(request["base-url"]).toBe("https://llm.example");
+    expect(request).not.toHaveProperty("temperature");
+    expect(request).not.toHaveProperty("max-tokens");
+    expect(request).not.toHaveProperty("reasoning-effort");
+    expect(request).not.toHaveProperty("timeout");
+
+    const [record] = JSON.parse(localStorage.getItem("efficient-daemon.history.v2")!) as RunRecord[];
+    expect(record.draft.settings).toMatchObject({
+      provider: "openai",
+      model: "server-model",
+      baseURL: "https://llm.example",
+      apiKey: "",
+      reasoningEffort: "medium",
+      temperatureEnabled: true,
+      temperature: "0",
+      maxTokensEnabled: true,
+      maxTokens: "640",
+      timeout: "15s",
+    });
+    expect(record.draft.parts).toEqual([
+      { id: "uploaded-image", kind: "image", image: "", source: "upload", fileName: "diagram.png" },
+    ]);
+  });
 });
 
 describe("schema check", () => {
+  it("stops rerendering after the lint input settles", async () => {
+    let commits = 0;
+    await act(async () =>
+      root.render(
+        <Profiler id="app" onRender={() => { commits += 1; }}>
+          <App />
+        </Profiler>,
+      ),
+    );
+    await settle(350);
+    expect(lintCalls).toHaveLength(1);
+    await finishLint(0);
+
+    const settledCommits = commits;
+    await settle(700);
+    expect(commits).toBe(settledCommits);
+  });
+
   it("blocks Run while the deferred Draft lags a lint input edit", async () => {
     defer.frozen = true;
     await mount();

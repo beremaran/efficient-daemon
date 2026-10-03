@@ -84,14 +84,24 @@ export function useDraft() {
 const withoutKey = (r: RunRecord): RunRecord => ({ ...r, draft: withoutApiKey(r.draft) });
 
 export function loadHistory(): RunRecord[] {
+  // Removing the legacy key is cleanup only; a read-only store can still have
+  // readable v2 history, so keep this separate from the history read.
   try {
-    // v1 records held the request body, not the Draft; drop them.
     localStorage.removeItem("efficient-daemon.history.v1");
+  } catch {
+    // ignore
+  }
+
+  try {
     const raw = localStorage.getItem(HISTORY_KEY);
     if (!raw) return [];
     // Older records kept the API key with the Draft; drop it, in storage too.
     const records = (JSON.parse(raw) as RunRecord[]).map(withoutKey);
-    if (JSON.stringify(records) !== raw) saveHistory(records);
+    if (JSON.stringify(records) !== raw) {
+      // The in-memory sanitized records remain useful when localStorage is
+      // readable but refuses the migration write.
+      saveHistory(records);
+    }
     return records;
   } catch {
     return [];

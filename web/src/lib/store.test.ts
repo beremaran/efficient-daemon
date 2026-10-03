@@ -91,4 +91,34 @@ describe("API key storage", () => {
     loadHistory();
     expect(localStorage.getItem("efficient-daemon.history.v2")).not.toContain("sk-secret");
   });
+
+  it("loads v2 history when removing the legacy key fails", () => {
+    const record = { at: 1, draft: withoutApiKey(withKey) } as RunRecord;
+    const raw = JSON.stringify([record]);
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => (key === "efficient-daemon.history.v2" ? raw : null),
+      removeItem: () => {
+        throw new Error("read-only");
+      },
+      setItem: vi.fn(),
+    });
+
+    expect(loadHistory()).toMatchObject([{ at: 1, draft: { settings: { model: "m", apiKey: "" } } }]);
+  });
+
+  it("returns sanitized history when its migration write fails", () => {
+    const record = { at: 1, draft: withKey } as RunRecord;
+    const raw = JSON.stringify([record]);
+    const setItem = vi.fn(() => {
+      throw new Error("read-only");
+    });
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => (key === "efficient-daemon.history.v2" ? raw : null),
+      removeItem: vi.fn(),
+      setItem,
+    });
+
+    expect(loadHistory()).toMatchObject([{ at: 1, draft: { settings: { model: "m", apiKey: "" } } }]);
+    expect(setItem).toHaveBeenCalledOnce();
+  });
 });

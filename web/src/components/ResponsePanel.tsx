@@ -10,7 +10,7 @@ import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { prettyJson } from "@/lib/ask";
 import { downloadText } from "@/lib/download";
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { elapsedLabel, stoppedLabel, useElapsed } from "@/lib/run";
 
 export interface RunState {
@@ -40,7 +40,7 @@ function RunningBadge({ startedAt }: { startedAt?: number }) {
 export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Extension }) {
   const { running, startedAt, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
   const [tab, setTab] = useState("response");
-  const shown = prettyJson(responseText);
+  const shown = useMemo(() => (running ? responseText : prettyJson(responseText)), [responseText, running]);
   const noRunYet = !running && !cancelled && status === null && !responseText && !error;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
