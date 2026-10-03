@@ -31,7 +31,7 @@ const IDLE_STATE: RunState = {
 };
 
 export default function App() {
-  const [draft, setDraft] = useDraft();
+  const [draft, setDraft, keepKey, setKeepKey] = useDraft();
   const { history, push, clear } = useHistory();
   const [serverDefaults, setServerDefaults] = useState<Partial<Settings>>({});
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
@@ -227,7 +227,12 @@ export default function App() {
     if (canRun) void runRequest();
   });
 
-  const restore = (record: RunRecord) => setDraft({ ...record.draft, parts: withPartIds(record.draft.parts) });
+  const restore = (record: RunRecord) =>
+    setDraft({
+      ...record.draft,
+      parts: withPartIds(record.draft.parts),
+      settings: { ...record.draft.settings, apiKey: draft.settings.apiKey },
+    });
 
   return (
     <div className="flex h-screen flex-col bg-muted/30">
@@ -259,6 +264,8 @@ export default function App() {
                 <ConnectionPanel
                   settings={draft.settings}
                   serverDefaults={serverDefaults}
+                  keepKey={keepKey}
+                  onKeepKeyChange={setKeepKey}
                   onChange={(settings: Settings) => setDraft({ ...draft, settings })}
                 />
               </CardContent>
