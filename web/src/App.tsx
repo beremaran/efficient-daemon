@@ -16,7 +16,7 @@ import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings, snapshotDraftForHistory } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
 import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, scrollToResponse, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
-import { withPartIds } from "@/lib/parts";
+import { newPartId } from "@/lib/parts";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import { errorMessage } from "@/lib/utils";
 import type { Draft, RunRecord, Settings } from "@/lib/types";
@@ -256,7 +256,8 @@ export default function App() {
   const restore = (record: RunRecord) => {
     const restored = {
       ...record.draft,
-      parts: withPartIds(record.draft.parts),
+      // New ids, so a file read still running for a current Part cannot land on a restored one.
+      parts: record.draft.parts.map((p) => ({ ...p, id: newPartId() })),
       // Send the key only to the connection it was typed for.
       settings: {
         ...record.draft.settings,

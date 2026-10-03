@@ -212,3 +212,18 @@ describe("Undo restore", () => {
     expect(field("textarea").value).toBe("old");
   });
 });
+
+describe("Restore", () => {
+  it("gives restored Parts new ids, even when the record shares them with the Draft", async () => {
+    const record = { at: 1, status: 200, latencyMs: 1, model: "m", draft: jevjam, response: {}, responseText: "{}", error: null } as RunRecord;
+    localStorage.setItem("efficient-daemon.history.v2", JSON.stringify([record]));
+    await mount();
+    expect(host.querySelector("[data-part-id]")!.getAttribute("data-part-id")).toBe("p");
+    await act(async () => button("History")!.dispatchEvent(new MouseEvent("mousedown", { bubbles: true, button: 0 })));
+    await act(async () => button("Restore")!.click());
+    const ids = [...host.querySelectorAll("[data-part-id]")].map((el) => el.getAttribute("data-part-id"));
+    expect(ids).toHaveLength(1);
+    expect(ids[0]).toBeTruthy();
+    expect(ids[0]).not.toBe("p");
+  });
+});
