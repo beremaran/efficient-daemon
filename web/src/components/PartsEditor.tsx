@@ -1,4 +1,4 @@
-import { useRef } from "react";
+import { useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, Image as ImageIcon, Plus, Trash2, Type } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -23,6 +23,11 @@ export function PartsEditor({
   /** Size of the Ask request; null while it can't be built. */
   bytes: number | null;
 }) {
+  // File errors by Part id; UI-only, so they stay out of the Draft.
+  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+  const setFileError = (id: string, message?: string) =>
+    setFileErrors(({ [id]: _old, ...rest }) => (message ? { ...rest, [id]: message } : rest));
+
   const setPart = (index: number, patch: Partial<Part>) => {
     const next = [...parts];
     next[index] = { ...next[index], ...patch };
@@ -39,8 +44,13 @@ export function PartsEditor({
           index={i}
           part={part}
           count={parts.length}
+          error={fileErrors[part.id]}
+          onError={(message) => setFileError(part.id, message)}
           onChange={(patch) => setPart(i, patch)}
-          onRemove={() => onPartsChange(removePart(parts, i))}
+          onRemove={() => {
+            setFileError(part.id);
+            onPartsChange(removePart(parts, i));
+          }}
           onMove={(delta) => onPartsChange(movePart(parts, i, delta))}
         />
       ))}
@@ -82,10 +92,12 @@ function PayloadMeter({ totalBytes }: { totalBytes: number }) {
   );
 }
 
-function PartEditor({
+export function PartEditor({
   index,
   part,
   count,
+  error,
+  onError,
   onChange,
   onRemove,
   onMove,
@@ -93,6 +105,9 @@ function PartEditor({
   index: number;
   part: Part;
   count: number;
+  /** File error to show under this Part. */
+  error?: string;
+  onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
   onRemove: () => void;
   onMove: (delta: -1 | 1) => void;
@@ -128,8 +143,8 @@ function PartEditor({
             className="min-h-[160px]"
           />
         )}
-        {part.kind === "image" && <ImagePartEditor part={part} onChange={onChange} />}
-        {part.kind === "pdf" && <PdfPartEditor part={part} onChange={onChange} />}
+        {part.kind === "image" && <ImagePartEditor part={part} error={error} onError={onError} onChange={onChange} />}
+        {part.kind === "pdf" && <PdfPartEditor part={part} error={error} onError={onError} onChange={onChange} />}
       </CardContent>
     </Card>
   );
@@ -137,9 +152,13 @@ function PartEditor({
 
 function ImagePartEditor({
   part,
+  error,
+  onError,
   onChange,
 }: {
   part: Part;
+  error?: string;
+  onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
 }) {
   const urlMode = part.source === "url";
@@ -149,7 +168,10 @@ function ImagePartEditor({
         <Label className="text-xs text-muted-foreground">Upload</Label>
         <Switch
           checked={urlMode}
-          onCheckedChange={(v) => onChange({ source: v ? "url" : "upload", image: "", fileName: undefined })}
+          onCheckedChange={(v) => {
+            onError();
+            onChange({ source: v ? "url" : "upload", image: "", fileName: undefined });
+          }}
           aria-label="toggle image URL mode"
         />
         <Label className="text-xs text-muted-foreground">http(s) URL</Label>
@@ -166,6 +188,8 @@ function ImagePartEditor({
           accept="image/*"
           enforceImageCap
           fileName={part.fileName}
+          error={error}
+          onError={onError}
           onFile={(b64, name) => onChange({ image: b64, fileName: name })}
         />
       )}
@@ -180,11 +204,23 @@ function ImagePartEditor({
   );
 }
 
-function PdfPartEditor({ part, onChange }: { part: Part; onChange: (patch: Partial<Part>) => void }) {
+function PdfPartEditor({
+  part,
+  error,
+  onError,
+  onChange,
+}: {
+  part: Part;
+  error?: string;
+  onError: (message?: string) => void;
+  onChange: (patch: Partial<Part>) => void;
+}) {
   return (
     <FileInput
       accept="application/pdf,.pdf"
       fileName={part.fileName}
+      error={error}
+      onError={onError}
       onFile={(pdf, name) => onChange({ pdf, fileName: name })}
     />
   );
@@ -194,11 +230,15 @@ function FileInput({
   accept,
   fileName,
   enforceImageCap,
+  error,
+  onError,
   onFile,
 }: {
   accept: string;
   enforceImageCap?: boolean;
   fileName?: string;
+  error?: string;
+  onError: (message?: string) => void;
   onFile: (base64: string, name: string) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
@@ -214,11 +254,12 @@ function FileInput({
           if (!file) return;
           const guard = enforceImageCap ? checkImageFile(file) : { ok: true };
           if (!guard.ok) {
-            alert(guard.message);
+            onError(guard.message);
             e.target.value = "";
             return;
           }
           const b64 = await fileToBase64(file);
+          onError();
           onFile(b64, file.name);
           e.target.value = "";
         }}
@@ -229,6 +270,11 @@ function FileInput({
         </Button>
         {fileName && <span className="truncate text-xs text-muted-foreground">{fileName}</span>}
       </div>
+      {error && (
+        <p role="alert" className="text-xs text-destructive">
+          {error}
+        </p>
+      )}
     </div>
   );
 }
