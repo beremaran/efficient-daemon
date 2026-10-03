@@ -16,6 +16,7 @@ import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
 import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint, stoppedState, useRunKeys } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
+import { errorMessage } from "@/lib/utils";
 import type { RunRecord, Settings } from "@/lib/types";
 
 const IDLE_STATE: RunState = {
@@ -182,7 +183,7 @@ export default function App() {
         setRun((r) => stoppedState(r, Date.now() - startedAt));
         return;
       }
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       setRun({
         running: false,
         status: null,

@@ -1,5 +1,7 @@
 // POST /schema/lint client.
 
+import { errorMessage } from "@/lib/utils";
+
 export interface LintResult {
   valid: boolean;
   errors: string[];
@@ -23,7 +25,7 @@ export async function lintSchema(body: string): Promise<LintResult> {
   } catch (err) {
     return {
       valid: false,
-      errors: [`lint failed: ${err instanceof Error ? err.message : String(err)}`],
+      errors: [`lint failed: ${errorMessage(err)}`],
       warnings: [],
     };
   }
