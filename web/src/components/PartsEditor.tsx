@@ -38,7 +38,7 @@ export function PartsEditor({
     onPartsChange(next);
   };
 
-  // Where focus goes after a remove: a Part id, or the add buttons when `id` is unset.
+  // Where focus goes after a remove or Undo: a Part id, or the add buttons when `id` is unset.
   const rootRef = useRef<HTMLDivElement>(null);
   const afterRemove = useRef<{ id?: string }>(undefined);
   useEffect(() => {
@@ -103,6 +103,7 @@ export function PartsEditor({
           label={`Removed ${removed.part.fileName ?? "file"}`}
           onUndo={() => {
             change(restorePart(parts, removed.part, removed.index));
+            afterRemove.current = { id: removed.part.id };
             dropUndo();
           }}
         />
