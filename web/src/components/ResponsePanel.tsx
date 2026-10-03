@@ -3,11 +3,10 @@ import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/CopyButton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
-import { copyText } from "@/lib/store";
 
 export interface RunState {
   running: boolean;
@@ -52,9 +51,9 @@ export function ResponsePanel({ state }: { state: RunState }) {
         </div>
         <span className="flex-1" />
         {responseText && (
-          <Button variant="ghost" size="sm" onClick={() => copyText(responseText)}>
+          <CopyButton text={responseText} variant="ghost" size="sm">
             Copy response
-          </Button>
+          </CopyButton>
         )}
       </div>
 
