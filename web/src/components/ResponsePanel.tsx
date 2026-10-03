@@ -15,6 +15,8 @@ import { elapsedLabel, stoppedLabel, useElapsed } from "@/lib/run";
 
 export interface RunState {
   running: boolean;
+  /** When the run began (ms since epoch); the response tab can remount mid-run. */
+  startedAt?: number;
   cancelled?: boolean;
   status: number | null;
   latencyMs: number | null;
@@ -25,18 +27,18 @@ export interface RunState {
   requestPreview: string;
 }
 
-// Mounts when a run starts, so the timer starts at 0 each run.
+// The timer counts from the run's own start time, so remounting does not reset it.
 // The timer is hidden from screen readers, or the status region would read it every second.
-function RunningBadge() {
+function RunningBadge({ startedAt }: { startedAt?: number }) {
   return (
     <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">
-      Running… <span aria-hidden="true">{elapsedLabel(useElapsed())}</span>
+      Running… <span aria-hidden="true">{elapsedLabel(useElapsed(startedAt))}</span>
     </Badge>
   );
 }
 
 export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Extension }) {
-  const { running, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
+  const { running, startedAt, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
   const [tab, setTab] = useState("response");
   const shown = prettyJson(responseText);
   const noRunYet = !running && !cancelled && status === null && !responseText && !error;
@@ -46,7 +48,7 @@ export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Ex
         {/* Stays mounted so screen readers announce the badge text. */}
         <div role="status" className="flex items-center gap-2">
           {running ? (
-            <RunningBadge />
+            <RunningBadge startedAt={startedAt} />
           ) : cancelled ? (
             <Badge variant="outline">{stoppedLabel(latencyMs ?? 0)}</Badge>
           ) : status !== null ? (

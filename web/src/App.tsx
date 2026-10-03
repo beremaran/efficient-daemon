@@ -144,7 +144,7 @@ export default function App() {
     const startedAt = Date.now();
     const controller = new AbortController();
     abortController.current = controller;
-    setRun({ ...IDLE_STATE, running: true, requestPreview });
+    setRun({ ...IDLE_STATE, running: true, startedAt, requestPreview });
     // 1024px is Tailwind's lg, where the layout turns two-column.
     scrollToResponse(responseSection.current, window.matchMedia("(min-width: 1024px)").matches);
     try {

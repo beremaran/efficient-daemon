@@ -209,6 +209,19 @@ describe("stoppedState", () => {
   });
 });
 
+describe("startElapsed from a given start", () => {
+  afterEach(() => vi.useRealTimers());
+
+  it("counts from the start time, not from the call", () => {
+    vi.useFakeTimers();
+    const ticks: number[] = [];
+    const stop = startElapsed((ms) => ticks.push(ms), Date.now() - 5000);
+    vi.advanceTimersByTime(1000);
+    stop();
+    expect(ticks).toEqual([6000]);
+  });
+});
+
 describe("startElapsed", () => {
   afterEach(() => vi.useRealTimers());
 

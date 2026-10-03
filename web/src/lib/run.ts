@@ -76,9 +76,8 @@ export const stoppedState = (prev: RunState, elapsedMs: number): RunState => ({
 
 export const stoppedLabel = (elapsedMs: number) => `Stopped after ${(elapsedMs / 1000).toFixed(1)} s`;
 
-// Calls `onTick` with the ms elapsed every second; returns a function that stops it.
-export function startElapsed(onTick: (elapsedMs: number) => void): () => void {
-  const startedAt = Date.now();
+// Calls `onTick` with the ms elapsed since `startedAt` every second; returns a function that stops it.
+export function startElapsed(onTick: (elapsedMs: number) => void, startedAt = Date.now()): () => void {
   const id = setInterval(() => onTick(Date.now() - startedAt), 1000);
   return () => clearInterval(id);
 }
@@ -106,10 +105,10 @@ export function useRunKeys(run: () => void): Extension {
   return useMemo(() => runKeymap(() => latest.current()), []);
 }
 
-// Shows seconds since mount; render it only while a run is in progress.
-export function useElapsed(): number {
-  const [elapsedMs, setElapsedMs] = useState(0);
-  useEffect(() => startElapsed(setElapsedMs), []);
+// Shows ms since `startedAt`; render it only while a run is in progress.
+export function useElapsed(startedAt: number | undefined): number {
+  const [elapsedMs, setElapsedMs] = useState(() => (startedAt === undefined ? 0 : Date.now() - startedAt));
+  useEffect(() => startElapsed(setElapsedMs, startedAt), [startedAt]);
   return elapsedMs;
 }
 
