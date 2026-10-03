@@ -98,7 +98,7 @@ func newAskCommand() *cobra.Command {
 	flags.StringVar(&opts.reasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
 	flags.Float64Var(&opts.temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&opts.maxTokens, "max-tokens", 0, "maximum tokens to generate")
-	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
+	flags.DurationVar(&opts.timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (openai retries each get the full budget; jevjam does not retry); 0 disables it")
 	flags.IntVar(&opts.maxScoreLevels, "max-score-levels", jevjam.DefaultMaxScoreLevels, "jevjam: most values a bounded integer property may span")
 	_ = cmd.MarkFlagRequired("schema")
 	return cmd
@@ -152,6 +152,11 @@ func validateInputs(opts options, args []string) error {
 	}
 	if strings.TrimSpace(opts.model) == "" && opts.provider != core.ProviderJevjam {
 		return fmt.Errorf("--model is required")
+	}
+	if opts.provider == core.ProviderJevjam {
+		if err := jevjam.ValidateMaxScoreLevels(opts.maxScoreLevels); err != nil {
+			return fmt.Errorf("--%w", err)
+		}
 	}
 	if opts.timeout < 0 {
 		return fmt.Errorf("--timeout must not be negative")
@@ -309,9 +314,6 @@ func newServeCommand() *cobra.Command {
 			if err := applyServeEnv(cmd); err != nil {
 				return err
 			}
-			if err := rejectLLMOnlyFlags(cmd, cfg.Provider); err != nil {
-				return err
-			}
 			flags := cmd.Flags()
 			if flags.Changed("temperature") {
 				cfg.Temperature = &temperature
@@ -335,7 +337,7 @@ func newServeCommand() *cobra.Command {
 	flags.StringVar(&cfg.ReasoningEffort, "reasoning-effort", "high", "reasoning effort: none, minimal, low, medium, high, xhigh, or max")
 	flags.Float64Var(&temperature, "temperature", 0, "sampling temperature; omit to use the server default")
 	flags.Int64Var(&maxTokens, "max-tokens", 0, "maximum tokens to generate")
-	flags.DurationVar(&cfg.Timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (retries each get the full budget); 0 disables it")
+	flags.DurationVar(&cfg.Timeout, "timeout", core.DefaultTimeout, "timeout per request attempt (openai retries each get the full budget; jevjam does not retry); 0 disables it")
 	flags.IntVar(&cfg.MaxScoreLevels, "max-score-levels", jevjam.DefaultMaxScoreLevels, "jevjam: most values a bounded integer property may span (request default)")
 	flags.BoolVar(&workbench, "workbench", false, "serve the interactive workbench UI at / (assets are embedded)")
 	return cmd

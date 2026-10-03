@@ -4,7 +4,6 @@
 package server
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
@@ -20,7 +19,6 @@ import (
 	"strconv"
 	"strings"
 	"time"
-	"unicode/utf16"
 
 	"github.com/beremaran/efficient-daemon/internal/core"
 	"github.com/beremaran/efficient-daemon/internal/jevjam"
@@ -69,7 +67,8 @@ type AskRequest struct {
 	Temperature     *float64        `json:"temperature,omitempty"`
 	MaxTokens       *int64          `json:"max-tokens,omitempty"`
 	Timeout         string          `json:"timeout,omitempty" jsonschema:"description=Per-attempt timeout as a Go duration (e.g. 30s); empty keeps the server default."`
-	MaxScoreLevels  *int            `json:"max-score-levels,omitempty" jsonschema:"description=jevjam only: most values a bounded integer property may span."`
+	MaxScoreLevels  *int            `json:"max-score-levels,omitempty" jsonschema:"description=jevjam only: most values a bounded integer property may span (2 to 64)."`
+	Answers         bool            `json:"answers,omitempty" jsonschema:"description=jevjam only: wrap the body as {result, answers} to include jevjam's raw answers."`
 }
 
 // New builds the HTTP handler and generates the OpenAPI document.
@@ -117,25 +116,39 @@ type settings struct {
 // resolve merges request fields over the server defaults and validates the
 // result with the same rules the CLI applies to its flags.
 func (h *handler) resolve(req AskRequest) (settings, error) {
-	s := settings{
-		provider:       firstNonEmpty(strings.TrimSpace(req.Provider), h.defaults.Provider, core.ProviderOpenAI),
-		model:          firstNonEmpty(strings.TrimSpace(req.Model), strings.TrimSpace(h.defaults.Model)),
-		baseURL:        firstNonEmpty(strings.TrimSpace(req.BaseURL), strings.TrimSpace(h.defaults.BaseURL)),
-		apiKey:         strings.TrimSpace(firstNonEmpty(req.APIKey, h.defaults.APIKey)),
-		effort:         strings.TrimSpace(firstNonEmpty(req.ReasoningEffort, h.defaults.ReasoningEffort)),
-		temperature:    orDefault(req.Temperature, h.defaults.Temperature),
-		maxTokens:      orDefault(req.MaxTokens, h.defaults.MaxTokens),
-		timeout:        h.defaults.Timeout,
-		maxScoreLevels: *orDefault(req.MaxScoreLevels, &h.defaults.MaxScoreLevels),
+	d := h.defaults
+	d.Provider = firstNonEmpty(d.Provider, core.ProviderOpenAI)
+	provider := firstNonEmpty(strings.TrimSpace(req.Provider), d.Provider)
+	if provider != d.Provider {
+		// The server's connection defaults belong to its own provider; never
+		// send its model or key to another one.
+		d.Model, d.BaseURL, d.APIKey = "", "", ""
 	}
-	if s.maxScoreLevels == 0 {
+	s := settings{
+		provider:       provider,
+		model:          firstNonEmpty(strings.TrimSpace(req.Model), strings.TrimSpace(d.Model)),
+		baseURL:        firstNonEmpty(strings.TrimSpace(req.BaseURL), strings.TrimSpace(d.BaseURL)),
+		apiKey:         strings.TrimSpace(firstNonEmpty(req.APIKey, d.APIKey)),
+		effort:         strings.TrimSpace(firstNonEmpty(req.ReasoningEffort, d.ReasoningEffort)),
+		temperature:    orDefault(req.Temperature, d.Temperature),
+		maxTokens:      orDefault(req.MaxTokens, d.MaxTokens),
+		timeout:        d.Timeout,
+		maxScoreLevels: *orDefault(req.MaxScoreLevels, &d.MaxScoreLevels),
+	}
+	if s.maxScoreLevels == 0 && req.MaxScoreLevels == nil {
 		s.maxScoreLevels = jevjam.DefaultMaxScoreLevels
 	}
 	if err := core.ValidateProvider(s.provider); err != nil {
 		return s, err
 	}
+	if err := jevjam.ValidateMaxScoreLevels(s.maxScoreLevels); err != nil {
+		return s, err
+	}
 	if s.provider == core.ProviderJevjam && (req.System != "" || req.ReasoningEffort != "" || req.Temperature != nil || req.MaxTokens != nil) {
 		return s, errors.New("system, reasoning-effort, temperature, and max-tokens do not apply to the jevjam provider")
+	}
+	if s.provider != core.ProviderJevjam && req.Answers {
+		return s, errors.New("answers applies only to the jevjam provider")
 	}
 	if req.Timeout != "" {
 		parsed, err := time.ParseDuration(req.Timeout)
@@ -236,14 +249,10 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	var raw json.RawMessage
+	var raw, answers json.RawMessage
 	started := time.Now()
 	if plan != nil {
-		var answers json.RawMessage
 		raw, answers, err = jevjam.Ask(r.Context(), jevjam.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Model: cfg.model, Timeout: cfg.timeout}, plan, messages)
-		if answers != nil {
-			w.Header().Set("X-Jevjam-Answers", headerJSON(answers))
-		}
 	} else {
 		client, clientErr := core.NewClient(core.Config{BaseURL: cfg.baseURL, APIKey: cfg.apiKey, Timeout: cfg.timeout})
 		if clientErr != nil {
@@ -266,6 +275,9 @@ func (h *handler) handleAsk(w http.ResponseWriter, r *http.Request) {
 	if err := responseschema.ValidateValue(sch, raw); err != nil {
 		writeError(w, http.StatusUnprocessableEntity, err)
 		return
+	}
+	if req.Answers {
+		raw, _ = json.Marshal(map[string]json.RawMessage{"result": raw, "answers": answers})
 	}
 	w.Header().Set("Content-Type", "application/json")
 	_ = output.Write(w, raw, "json-pretty")
@@ -334,26 +346,6 @@ func upstreamStatus(err error) int {
 		return http.StatusGatewayTimeout
 	}
 	return http.StatusBadGateway
-}
-
-// headerJSON compacts JSON onto one line and escapes non-ASCII runes, since
-// header values are read as Latin-1.
-func headerJSON(raw json.RawMessage) string {
-	var compact bytes.Buffer
-	if json.Compact(&compact, raw) != nil {
-		return ""
-	}
-	var b strings.Builder
-	for _, r := range compact.String() {
-		if r < 0x80 {
-			b.WriteRune(r)
-			continue
-		}
-		for _, unit := range utf16.Encode([]rune{r}) {
-			fmt.Fprintf(&b, `\u%04x`, unit)
-		}
-	}
-	return b.String()
 }
 
 func writeError(w http.ResponseWriter, status int, err error) {

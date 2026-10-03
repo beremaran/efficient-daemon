@@ -13,15 +13,19 @@ const jevjamSchema = `{"type":"object","properties":{"mood":{"type":"string","en
 
 func TestAskJevjamEndToEnd(t *testing.T) {
 	var sent map[string]any
+	var auth string
 	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		auth = r.Header.Get("Authorization")
 		body, _ := io.ReadAll(r.Body)
 		_ = json.Unmarshal(body, &sent)
 		_, _ = io.WriteString(w, `{"answers":{"mood":{"choice":"café","probabilities":{"café":0.7,"bar":0.3}},"leave":{"noul":0.2}}}`)
 	}))
 	defer upstream.Close()
-	h := newTestHandler(t, upstream.URL)
+	// The server defaults belong to openai, so none of them reach jevjam.
+	h := newTestHandler(t, "http://openai.example")
+	ask := `{"provider":"jevjam","base-url":"` + upstream.URL + `","schema":` + jevjamSchema + `,"parts":[{"text":"hello"}]`
 
-	rec := postAsk(t, h, `{"provider":"jevjam","schema":`+jevjamSchema+`,"parts":[{"text":"hello"}]}`)
+	rec := postAsk(t, h, ask+`}`)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("status = %d, body = %s", rec.Code, rec.Body.String())
 	}
@@ -29,16 +33,17 @@ func TestAskJevjamEndToEnd(t *testing.T) {
 	if err := json.Unmarshal(rec.Body.Bytes(), &got); err != nil || got["mood"] != "café" || got["leave"] != false {
 		t.Fatalf("body = %s (%v)", rec.Body.String(), err)
 	}
-	header := rec.Header().Get("X-Jevjam-Answers")
-	if strings.ContainsFunc(header, func(r rune) bool { return r > 0x7f }) {
-		t.Errorf("header holds non-ASCII bytes: %s", header)
+	if sent["state"] != "hello" || sent["model"] != nil || auth != "" {
+		t.Errorf("jevjam request = %v, Authorization = %q", sent, auth)
 	}
-	var answers map[string]map[string]any
-	if err := json.Unmarshal([]byte(header), &answers); err != nil || answers["mood"]["choice"] != "café" {
-		t.Errorf("X-Jevjam-Answers = %s (%v)", header, err)
+
+	rec = postAsk(t, h, ask+`,"answers":true}`)
+	var wrapped struct {
+		Result  map[string]any            `json:"result"`
+		Answers map[string]map[string]any `json:"answers"`
 	}
-	if sent["state"] != "hello" || sent["model"] != "test" {
-		t.Errorf("jevjam request = %v", sent)
+	if err := json.Unmarshal(rec.Body.Bytes(), &wrapped); err != nil || wrapped.Result["mood"] != "café" || wrapped.Answers["mood"]["choice"] != "café" {
+		t.Fatalf("status = %d, body = %s (%v)", rec.Code, rec.Body.String(), err)
 	}
 }
 
@@ -50,6 +55,9 @@ func TestAskJevjamRejectsBadRequests(t *testing.T) {
 		"reasoning-effort": `{"provider":"jevjam","reasoning-effort":"low","schema":` + jevjamSchema + `,"parts":[{"text":"x"}]}`,
 		"free string":      `{"provider":"jevjam","schema":` + testSchema + `,"parts":[{"text":"x"}]}`,
 		"unknown provider": `{"provider":"other","schema":` + testSchema + `,"parts":[{"text":"x"}]}`,
+		"huge levels":      `{"provider":"jevjam","max-score-levels":2000000000,"schema":` + jevjamSchema + `,"parts":[{"text":"x"}]}`,
+		"negative levels":  `{"provider":"jevjam","max-score-levels":-5,"schema":` + jevjamSchema + `,"parts":[{"text":"x"}]}`,
+		"openai answers":   `{"answers":true,"schema":` + testSchema + `,"parts":[{"text":"x"}]}`,
 	}
 	for name, body := range tests {
 		if rec := postAsk(t, h, body); rec.Code != http.StatusBadRequest {

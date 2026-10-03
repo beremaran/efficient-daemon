@@ -37,15 +37,21 @@ export default function App() {
   const abortController = useRef<AbortController | null>(null);
 
   const debouncedSchema = useDebounced(draft.schema, 300);
-  const effectiveSettings = useMemo(
-    () => ({
+  const debouncedMaxScoreLevels = useDebounced(draft.settings.maxScoreLevels, 300);
+  const effectiveSettings = useMemo(() => {
+    const provider = draft.settings.provider || String(serverDefaults.provider ?? "");
+    // The server's model and base URL belong to its own provider (see resolve).
+    const own = provider === serverDefaults.provider;
+    return {
       ...draft.settings,
-      provider: draft.settings.provider || String(serverDefaults.provider ?? ""),
-      model: draft.settings.model.trim() || String(serverDefaults.model ?? "").trim(),
-      baseURL: draft.settings.baseURL.trim() || String(serverDefaults.baseURL ?? "").trim(),
-    }),
-    [draft.settings, serverDefaults],
-  );
+      provider,
+      model: draft.settings.model.trim() || (own ? String(serverDefaults.model ?? "").trim() : ""),
+      baseURL: draft.settings.baseURL.trim() || (own ? String(serverDefaults.baseURL ?? "").trim() : ""),
+      maxScoreLevels: draft.settings.maxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? ""),
+    };
+  }, [draft.settings, serverDefaults]);
+  const lintMaxScoreLevels =
+    debouncedMaxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? "");
 
   // Server defaults for ghost text; no api-key by design.
   useEffect(() => {
@@ -73,8 +79,8 @@ export default function App() {
   }, []);
 
   useEffect(() => {
-    void runLint(debouncedSchema, effectiveSettings.provider, effectiveSettings.maxScoreLevels);
-  }, [debouncedSchema, effectiveSettings.provider, effectiveSettings.maxScoreLevels, runLint]);
+    void runLint(debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels);
+  }, [debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels, runLint]);
 
   const requestPreview = useMemo(() => {
     try {
@@ -115,18 +121,25 @@ export default function App() {
       const res = await fetch("/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        // jevjam's raw answers come wrapped with the result in the body.
+        body: JSON.stringify(jevjam ? { ...(body as object), answers: true } : body),
         signal: controller.signal,
       });
       const latencyHeader = res.headers.get("X-Latency-Ms");
       const latencyMs = latencyHeader ? Number(latencyHeader) : null;
-      const text = await res.text();
+      let text = await res.text();
+      let answers: string | null = null;
+      if (jevjam && res.ok) {
+        const wrapped = safeParse(text) as { result?: unknown; answers?: unknown };
+        text = JSON.stringify(wrapped.result, null, 2);
+        answers = JSON.stringify(wrapped.answers);
+      }
       const state: RunState = {
         running: false,
         status: res.status,
         latencyMs,
         responseText: text,
-        answers: res.headers.get("X-Jevjam-Answers"),
+        answers,
         error: res.ok ? null : text,
         requestPreview: requestPreview,
       };

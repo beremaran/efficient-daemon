@@ -14,7 +14,7 @@ export interface RunState {
   status: number | null;
   latencyMs: number | null;
   responseText: string;
-  /** Raw jevjam answers from the X-Jevjam-Answers header. */
+  /** Raw jevjam answers, as JSON text. */
   answers: string | null;
   error: string | null;
   requestPreview: string;

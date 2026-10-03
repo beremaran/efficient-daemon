@@ -86,7 +86,8 @@ Each property of the schema becomes one question, and its `description` becomes 
 | `string` with `oneOf` of `{"const", "description"}` | `choice`, with each description shown to the model | the top label |
 | `boolean` | `noul` | `true` when the probability is at least 0.5 |
 | `integer` with `minimum` and `maximum` | `score`, one level per value | the expected level, rounded |
-| `integer` with `oneOf` of `{"const", "description"}` | `score`, with each description as a level, low to high | the expected level, rounded |
+| `integer` with `enum` | `score`, one level per value, low to high | the most likely level |
+| `integer` with `oneOf` of `{"const", "description"}` | `score`, with each description as a level, low to high | the most likely level |
 
 ```json
 {
@@ -107,7 +108,7 @@ Each property of the schema becomes one question, and its `description` becomes 
 }
 ```
 
-The schema must be an object with 1 to 64 such properties; anything else fails before a request is sent. An integer may span at most 11 values unless you raise `--max-score-levels`. Prefer `oneOf` for integers: bare numbers tell the model little about the scale, while labels like "not urgent", "soon", and "blocking" give much better scores. jevjam takes no system message and no sampling settings, so `--system`, `--system-file`, `--reasoning-effort`, `--temperature`, and `--max-tokens` are errors with this provider. Images and PDF pages are sent as images, which jevjam reads only with `--model clef-flash`.
+The schema must be an object with 1 to 64 such properties; anything else fails before a request is sent. An integer may span at most 11 values unless you raise `--max-score-levels` (up to 64). Prefer `oneOf` for integers: bare numbers tell the model little about the scale, while labels like "not urgent", "soon", and "blocking" give much better scores. jevjam takes no system message and no sampling settings, so `--system`, `--system-file`, `--reasoning-effort`, `--temperature`, and `--max-tokens` are errors with this provider. Images and PDF pages are sent as images, which jevjam reads only with `--model clef-flash`.
 
 ## HTTP API and workbench
 
@@ -122,7 +123,7 @@ efficient-daemon serve \
   --workbench
 ```
 
-The browser workbench is at `http://127.0.0.1:8080/`. You can provide the model and base URL in the `serve` flags, or provide them on each `POST /ask` request. The API key can be set with `--api-key`, `OPENAI_API_KEY`, or per request. The `/config` endpoint deliberately does not return the API key. `POST /ask` also takes `provider` and `max-score-levels`; with jevjam, the response body stays the same and the raw answers, with probabilities and confidence, come back in the `X-Jevjam-Answers` header. The workbench shows them in its Answers tab.
+The browser workbench is at `http://127.0.0.1:8080/`. You can provide the model and base URL in the `serve` flags, or provide them on each `POST /ask` request. The API key can be set with `--api-key`, `OPENAI_API_KEY`, or per request. The `/config` endpoint deliberately does not return the API key. `POST /ask` also takes `provider` and `max-score-levels`. A request whose `provider` differs from the server's does not inherit the server's model, base URL, or API key. With jevjam, the response body stays the same unless the request sets `"answers": true`; then the body is `{"result": ..., "answers": ...}`, where `answers` holds jevjam's raw answers with probabilities and confidence. The workbench shows them in its Answers tab.
 
 The API also exposes generated OpenAPI documentation at `/docs` and `/openapi.json`, plus `/schema/lint` for checking response schemas. The `serve` API has no authentication. Keep it bound to loopback unless you have protected network access in front of it; changing `--host` to a network interface allows clients that can reach that interface to submit requests.
 
