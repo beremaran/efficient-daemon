@@ -238,7 +238,7 @@ export default function App() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">User message parts</CardTitle>
+              <CardTitle className="text-sm">Message parts</CardTitle>
             </CardHeader>
             <CardContent>
               <PartsEditor
