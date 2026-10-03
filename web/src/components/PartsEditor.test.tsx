@@ -6,12 +6,12 @@ import { checkImageFile } from "@/lib/media";
 import { newPart } from "@/lib/parts";
 import { MAX_IMAGE_BYTES } from "@/lib/types";
 
-const render = (error?: string) =>
+const render = (error?: string, index = 0) =>
   renderToStaticMarkup(
     <PartEditor
-      index={0}
+      index={index}
       part={{ ...newPart("image"), source: "upload" }}
-      count={1}
+      count={2}
       error={error}
       onError={() => {}}
       onChange={() => {}}
@@ -35,5 +35,11 @@ describe("file size error", () => {
 
   it("shows nothing on a Part without an error", () => {
     expect(render()).not.toContain(`role="alert"`);
+  });
+
+  it("shows only on the Part that has the error", () => {
+    const message = checkImageFile(big).message as string;
+    expect(render(message, 1)).toContain(message);
+    expect(render(undefined, 0)).not.toContain(message);
   });
 });
