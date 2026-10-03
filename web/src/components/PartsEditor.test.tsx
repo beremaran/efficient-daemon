@@ -236,3 +236,11 @@ describe("image paste", () => {
     expect(pastedImage({ files: [file] as unknown as FileList })).toBeUndefined();
   });
 });
+
+describe("reorder and remove buttons", () => {
+  it("are at least 24x24 px", () => {
+    const buttons = render().match(/<button[^>]*aria-label="(Move|Remove)[^>]*>/g) ?? [];
+    expect(buttons).toHaveLength(3);
+    for (const b of buttons) expect(b).toMatch(/min-h-6[^"]*min-w-6|min-w-6[^"]*min-h-6/);
+  });
+});
