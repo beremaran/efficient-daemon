@@ -10,9 +10,13 @@ import type { Part } from "@/lib/types";
 
 // The read of a dropped file ends when the test says so.
 let finishRead: (base64: string) => void;
+let failRead: (message: string) => void;
 vi.mock("@/lib/media", async (importOriginal) => ({
   ...(await importOriginal<typeof import("@/lib/media")>()),
-  readDroppedFile: () => new Promise((resolve) => (finishRead = (base64) => resolve({ base64 }))),
+  readDroppedFile: () => new Promise((resolve) => {
+      finishRead = (base64) => resolve({ base64 });
+      failRead = (message) => resolve({ message });
+    }),
 }));
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -121,6 +125,14 @@ describe("a file dropped on a Part", () => {
     const [first, second] = host.querySelectorAll("[data-part-id]");
     expect(first.getAttribute("data-part-id")).toBe(other.id);
     expect(second.textContent).toContain("cat.png");
+  });
+
+  it("shows a rejected file's error while the URL tab is open", async () => {
+    const image = newPart("image");
+    mount([image]);
+    drop(image.id);
+    await act(async () => failRead("too big"));
+    expect(host.querySelector('[role="alert"]')?.textContent).toBe("too big");
   });
 
   it("is dropped when its Part is removed during the read", async () => {

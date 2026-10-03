@@ -316,7 +316,6 @@ function ImagePartEditor({
           accept="image/*"
           enforceImageCap
           fileName={part.fileName}
-          error={error}
           autoFocus={autoFocus}
           onError={onError}
           onFile={(b64, name) => onChange({ image: b64, fileName: name })}
@@ -329,6 +328,8 @@ function ImagePartEditor({
           />
         )}
       </TabsContent>
+      {/* Outside the tabs: a dropped or pasted file can fail while the URL tab is open. */}
+      <FileError error={error} />
     </Tabs>
   );
 }
@@ -401,11 +402,17 @@ function FileInput({
         </Button>
         {fileName && <span className="truncate text-xs text-muted-foreground">{fileName}</span>}
       </div>
-      {error && (
-        <p role="alert" className="text-xs text-destructive">
-          {error}
-        </p>
-      )}
+      <FileError error={error} />
     </div>
+  );
+}
+
+function FileError({ error }: { error?: string }) {
+  return (
+    error && (
+      <p role="alert" className="text-xs text-destructive">
+        {error}
+      </p>
+    )
   );
 }
