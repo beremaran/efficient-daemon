@@ -1,5 +1,7 @@
 // Shared small inputs used across the form panels.
 
+import { useId } from "react";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -45,14 +47,15 @@ export function OptionalNumberField({
   max?: number;
   step?: number;
 }) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
-        <Label htmlFor={label}>{label}</Label>
+        <Label htmlFor={id}>{label}</Label>
         <Switch checked={enabled} onCheckedChange={onEnabledChange} aria-label={`send ${label}`} />
       </div>
       <Input
-        id={label}
+        id={id}
         type="number"
         value={value}
         placeholder={placeholder ?? "server default"}
@@ -73,7 +76,6 @@ export function TextField({
   placeholder,
   type = "text",
   className,
-  id,
 }: {
   label: string;
   value: string;
@@ -81,13 +83,13 @@ export function TextField({
   placeholder?: string;
   type?: string;
   className?: string;
-  id?: string;
 }) {
+  const id = useId();
   return (
     <div className={cn("flex flex-col gap-1.5", className)}>
-      <Label htmlFor={id ?? label}>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Input
-        id={id ?? label}
+        id={id}
         type={type ?? "text"}
         value={value}
         placeholder={placeholder ?? "server default"}
