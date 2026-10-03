@@ -109,7 +109,7 @@ export function PartsEditor({
         />
       )}
 
-      {bytes !== null && <PayloadMeter totalBytes={bytes} />}
+      {bytes !== null && <SizeMeter totalBytes={bytes} />}
 
       <div data-add-parts className="flex items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => addPart("text")}>
@@ -137,7 +137,7 @@ export function UndoNotice({ label, onUndo }: { label: string; onUndo: () => voi
   );
 }
 
-function PayloadMeter({ totalBytes }: { totalBytes: number }) {
+function SizeMeter({ totalBytes }: { totalBytes: number }) {
   // Keep in sync with internal/server maxBodyBytes (30 MiB).
   const pct = Math.min(100, (totalBytes / MAX_BODY_BYTES) * 100);
   const over = totalBytes > MAX_BODY_BYTES;
@@ -150,7 +150,7 @@ function PayloadMeter({ totalBytes }: { totalBytes: number }) {
         />
       </div>
       <div className={cn("text-xs", over ? "text-destructive" : "text-muted-foreground")}>
-        payload ≈ {(totalBytes / (1 << 20)).toFixed(1)} MB / {MAX_BODY_MB} MB body cap
+        Ask request ≈ {(totalBytes / (1 << 20)).toFixed(1)} MB / {MAX_BODY_MB} MB cap
         {over ? " — over the cap; shrink or remove media" : ""}
       </div>
     </div>

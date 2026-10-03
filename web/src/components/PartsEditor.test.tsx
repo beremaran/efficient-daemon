@@ -244,3 +244,11 @@ describe("reorder and remove buttons", () => {
     for (const b of buttons) expect(b).toMatch(/min-h-6[^"]*min-w-6|min-w-6[^"]*min-h-6/);
   });
 });
+
+describe("PartsEditor size meter", () => {
+  it("calls the size the Ask request", () => {
+    const html = renderToStaticMarkup(<PartsEditor parts={[]} onPartsChange={() => {}} bytes={1 << 20} />);
+    expect(html).toContain("Ask request ≈ 1.0 MB / 30 MB cap");
+    expect(html).not.toMatch(/request body|payload/i);
+  });
+});

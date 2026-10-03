@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { askFromDraft, buildAskRequest, cliArgs, lintBody } from "@/lib/ask";
+import { askFromDraft, buildAskRequest, cliArgs, lintBody, prettyJson } from "@/lib/ask";
 import { DEFAULT_SETTINGS, EMPTY_DRAFT, type Draft, type Settings } from "@/lib/types";
 
 function draft(settings: Partial<Settings> = {}, rest: Partial<Draft> = {}): Draft {
@@ -127,5 +127,16 @@ describe("askFromDraft", () => {
   it("fills empty settings from server defaults", () => {
     const request = askFromDraft(draft({ model: "", provider: "" }), { provider: "openai", model: "srv" });
     expect(request.ok && request.body.model).toBe("srv");
+  });
+});
+
+describe("prettyJson", () => {
+  it("indents valid JSON", () => {
+    expect(prettyJson('{"a":[1,2]}')).toBe('{\n  "a": [\n    1,\n    2\n  ]\n}');
+  });
+
+  it("returns invalid JSON unchanged", () => {
+    expect(prettyJson('{"a":')).toBe('{"a":');
+    expect(prettyJson("plain text")).toBe("plain text");
   });
 });

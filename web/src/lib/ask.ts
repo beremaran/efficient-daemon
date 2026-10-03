@@ -90,3 +90,12 @@ export function cliArgs(body: AskBody, parts: Part[]): string[] {
     .map((p) => `--image ${shellQuote(p.source === "url" ? (p.image ?? "") : `./${p.fileName ?? "image"}`)}`);
   return [...flags, "--schema schema.json", ...(prompt ? [shellQuote(prompt)] : []), ...images];
 }
+
+/** Indents valid JSON; returns any other text unchanged. */
+export function prettyJson(text: string): string {
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2);
+  } catch {
+    return text;
+  }
+}

@@ -6,10 +6,10 @@ import { javascript } from "@codemirror/legacy-modes/mode/javascript";
 import { python } from "@codemirror/legacy-modes/mode/python";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { oneDark } from "@codemirror/theme-one-dark";
-import { Button } from "@/components/ui/button";
+import { editorProps } from "@/lib/editor";
+import { CopyButton } from "@/components/CopyButton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { elideBase64, generateSnippets } from "@/lib/codegen";
-import { copyText } from "@/lib/store";
 import type { AskRequest } from "@/lib/ask";
 import type { Part } from "@/lib/types";
 
@@ -40,7 +40,6 @@ export function CodegenPanel({
   runKeys: Extension;
 }) {
   const [lang, setLang] = useState<Lang>("curl");
-  const [copied, setCopied] = useState(false);
 
   const snippets = useMemo(
     () => (request.ok ? generateSnippets(request, parts, schema, window.location.origin) : []),
@@ -50,18 +49,11 @@ export function CodegenPanel({
   const current = snippets.find((s) => s.label === prettyLabel(lang)) ?? snippets[0];
   const display = current ? elideBase64(current.code) : "Fix the response schema to generate code.";
 
-  const copy = async () => {
-    if (current && await copyText(current.code)) {
-      setCopied(true);
-      setTimeout(() => setCopied(false), 1500);
-    }
-  };
-
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2">
         <Tabs value={lang} onValueChange={(v) => setLang(v as Lang)}>
-          <TabsList>
+          <TabsList variant="line">
             {LANGS.map((l) => (
               <TabsTrigger key={l} value={l}>
                 {prettyLabel(l)}
@@ -70,12 +62,12 @@ export function CodegenPanel({
           </TabsList>
         </Tabs>
         <span className="flex-1" />
-        <Button variant="secondary" size="sm" onClick={copy} disabled={!current}>
-          {copied ? "Copied!" : "Copy (full, untruncated)"}
-        </Button>
+        <CopyButton text={current?.code ?? ""} variant="secondary" size="sm" disabled={!current}>
+          Copy full snippet
+        </CopyButton>
       </div>
       <div className="text-xs text-muted-foreground">
-        Long base64 is elided in the display only; copying always yields the complete snippet.
+        The display shortens long base64 values; Copy full snippet copies them in full.
       </div>
       <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
         <CodeMirror
@@ -84,7 +76,7 @@ export function CodegenPanel({
           maxHeight="100%"
           extensions={[LANGUAGE_EXTENSIONS[lang], runKeys]}
           theme={oneDark}
-          editable={false}
+          {...editorProps(true)}
           className="h-full min-h-0 text-xs"
           basicSetup={{ lineNumbers: true, foldGutter: false }}
         />

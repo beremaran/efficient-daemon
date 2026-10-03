@@ -1,7 +1,7 @@
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { copyText } from "@/lib/store";
+import { CopyButton } from "@/components/CopyButton";
 import type { RunRecord } from "@/lib/types";
 
 export function HistoryPanel({
@@ -48,9 +48,9 @@ function HistoryRow({ record, onRestore }: { record: RunRecord; onRestore: (r: R
         <span className="text-xs text-muted-foreground">{new Date(record.at).toLocaleTimeString()}</span>
         {record.latencyMs !== null && <span className="text-xs text-muted-foreground">{record.latencyMs} ms</span>}
         <span className="flex-1" />
-        <Button variant="ghost" size="sm" onClick={() => copyText(record.responseText)}>
+        <CopyButton text={record.responseText} variant="ghost" size="sm">
           Copy
-        </Button>
+        </CopyButton>
         <Button variant="outline" size="sm" onClick={() => onRestore(record)}>
           Restore
         </Button>
