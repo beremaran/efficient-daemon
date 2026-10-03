@@ -21,6 +21,19 @@ beforeEach(() => {
   vi.stubGlobal("sessionStorage", memoryStorage());
 });
 
+describe("API key migration", () => {
+  it("keeps the saved Draft when the cleanup write fails", () => {
+    localStorage.setItem(DRAFT_KEY, JSON.stringify(withKey));
+    vi.stubGlobal("localStorage", {
+      getItem: (k: string) => (k === DRAFT_KEY ? JSON.stringify(withKey) : null),
+      setItem: () => {
+        throw new Error("read-only");
+      },
+    });
+    expect(loadDraft().settings.model).toBe("m");
+  });
+});
+
 describe("API key storage", () => {
   it("Don't save: no tab key, so the key is empty after a reload", () => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(withoutApiKey(withKey)));

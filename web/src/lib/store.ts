@@ -43,7 +43,11 @@ export function loadDraft(): Draft {
     if (!raw) return withApiKey(EMPTY_DRAFT, apiKey);
     const parsed = JSON.parse(raw) as Partial<Draft>;
     if (parsed.settings?.apiKey) {
-      localStorage.setItem(DRAFT_KEY, JSON.stringify(withoutApiKey({ ...parsed, settings: parsed.settings })));
+      try {
+        localStorage.setItem(DRAFT_KEY, JSON.stringify(withoutApiKey({ ...parsed, settings: parsed.settings })));
+      } catch {
+        // Best effort: keep the parsed Draft even if the cleanup write fails.
+      }
     }
     return {
       settings: { ...EMPTY_DRAFT.settings, ...parsed.settings, apiKey },
