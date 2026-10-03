@@ -3,7 +3,9 @@
 
 import type { Part } from "@/lib/types";
 
-export const newPartId = () => crypto.randomUUID();
+// randomUUID exists only in secure contexts, not on a LAN IP over plain HTTP.
+export const newPartId = () =>
+  crypto.randomUUID?.() ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}`;
 
 export function newPart(kind: Part["kind"]): Part {
   const id = newPartId();

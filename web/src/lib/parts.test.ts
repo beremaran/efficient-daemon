@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, switchImageSource, withPartIds } from "@/lib/parts";
 import type { Part } from "@/lib/types";
 import { loadDraft } from "@/lib/store";
@@ -11,6 +11,15 @@ describe("part ids", () => {
     { ...newPart("text"), text: "b" },
     { ...newPart("text"), text: "c" },
   ];
+
+  it("gives ids where crypto.randomUUID is missing", () => {
+    vi.stubGlobal("crypto", {});
+    try {
+      expect(withPartIds([{ kind: "text", text: "a" } as Part, newPart("text")]).every((p) => p.id)).toBe(true);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
 
   it("gives each new Part its own id", () => {
     expect(new Set(parts.map((p) => p.id)).size).toBe(3);
