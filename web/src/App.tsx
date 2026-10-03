@@ -13,7 +13,8 @@ import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
-import { lintAllowsRun, lintSchema, lintView, type LintResult } from "@/lib/lint";
+import { lintSchema, lintView, type LintResult } from "@/lib/lint";
+import { runBlocker } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -93,16 +94,17 @@ export default function App() {
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
   const jevjam = effectiveSettings.provider === "jevjam";
-  const canRun =
-    !run.running &&
-    (!!model || jevjam) &&
-    !!baseURL &&
-    draft.parts.length > 0 &&
-    lintAllowsRun(lint, checking) &&
-    request.ok &&
-    !!draft.parts.some((p) =>
-      p.kind === "text" ? (p.text ?? "").trim() : (p.image ?? p.pdf ?? "").trim(),
-    );
+  const blocker = runBlocker({
+    model,
+    baseURL,
+    jevjam,
+    parts: draft.parts,
+    request,
+    lint,
+    checking,
+    lintErrors: lintErrors.length,
+  });
+  const canRun = !run.running && blocker === null;
 
   const runRequest = async () => {
     const latest = askFromDraft(draft, serverDefaults);
@@ -190,7 +192,7 @@ export default function App() {
       <Header
         canRun={canRun}
         running={run.running}
-        lintIssues={lintErrors.length}
+        blocker={blocker}
         onRun={runRequest}
         onStop={() => abortController.current?.abort()}
       />
@@ -293,13 +295,13 @@ export default function App() {
 function Header({
   canRun,
   running,
-  lintIssues,
+  blocker,
   onRun,
   onStop,
 }: {
   canRun: boolean;
   running: boolean;
-  lintIssues: number;
+  blocker: string | null;
   onRun: () => void;
   onStop: () => void;
 }) {
@@ -308,9 +310,9 @@ function Header({
       <span className="font-semibold">efficient-daemon</span>
       <Badge variant="outline">workbench</Badge>
       <span className="flex-1" />
-      {lintIssues > 0 && (
-        <span className="text-xs text-destructive">
-          {lintIssues} schema issue{lintIssues > 1 ? "s" : ""} — fix before running
+      {blocker && !running && (
+        <span id="run-blocker" className="text-xs text-muted-foreground">
+          {blocker}
         </span>
       )}
       {running ? (
@@ -318,7 +320,7 @@ function Header({
           <Square fill="currentColor" /> Stop
         </Button>
       ) : (
-        <Button onClick={onRun} disabled={!canRun}>
+        <Button onClick={onRun} disabled={!canRun} aria-describedby={blocker ? "run-blocker" : undefined}>
           <Play /> Run
         </Button>
       )}

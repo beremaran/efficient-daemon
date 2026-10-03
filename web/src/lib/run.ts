@@ -1,0 +1,30 @@
+// Why Run is disabled: the first reason, or null when Run can go.
+
+import type { AskRequest } from "@/lib/ask";
+import { lintAllowsRun, type LintResult } from "@/lib/lint";
+import type { Part } from "@/lib/types";
+
+export interface RunInput {
+  model: string;
+  baseURL: string;
+  jevjam: boolean;
+  parts: Part[];
+  request: AskRequest;
+  lint: LintResult | null;
+  checking: boolean;
+  lintErrors: number;
+}
+
+const hasContent = (p: Part) => !!(p.kind === "text" ? (p.text ?? "") : (p.image ?? p.pdf ?? "")).trim();
+
+export function runBlocker(i: RunInput): string | null {
+  if (!i.model && !i.jevjam) return "Add a model in Connection & sampling";
+  if (!i.baseURL) return "Add a base URL in Connection & sampling";
+  if (!i.parts.some(hasContent)) return "Add a Part to the user message";
+  if (!i.request.ok || i.lintErrors > 0) {
+    const n = i.lintErrors;
+    return n > 0 ? `${n} schema issue${n > 1 ? "s" : ""} — fix before running` : "Fix the response schema";
+  }
+  if (!lintAllowsRun(i.lint, i.checking)) return "Checking the schema…";
+  return null;
+}
