@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -7,7 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import type { LintResult } from "@/lib/lint";
+import { cn } from "@/lib/utils";
+import { lintView, type LintResult } from "@/lib/lint";
 
 // json_typegen_wasm: the same engine transform.tools uses for
 // JSON → JSON Schema, so output matches that site.
@@ -31,16 +32,19 @@ export function SchemaPanel({
   onSchemaChange,
   lint,
   linting,
+  runKeys,
 }: {
   schema: string;
   onSchemaChange: (next: string) => void;
   lint: LintResult | null;
   linting: boolean;
+  runKeys: Extension;
 }) {
   const [mode, setMode] = useState<"edit" | "generate">("edit");
   const [sample, setSample] = useState("");
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const { stale } = lintView(lint, linting);
 
   const canGenerate = useMemo(() => {
     if (!sample.trim()) return false;
@@ -76,12 +80,12 @@ export function SchemaPanel({
           <TabsTrigger value="edit">Edit</TabsTrigger>
           <TabsTrigger value="generate">Generate from JSON</TabsTrigger>
         </TabsList>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {linting && <span>linting…</span>}
-          {lint && !linting && lint.valid && lint.warnings.length === 0 && (
+        <div className={cn("flex items-center gap-2 text-xs text-muted-foreground", stale && "opacity-60")}>
+          {linting && <span>{lint ? "out of date, checking…" : "linting…"}</span>}
+          {lint && lint.valid && lint.warnings.length === 0 && (
             <Badge className="border-emerald-600/30 bg-emerald-50 text-emerald-700">schema OK</Badge>
           )}
-          {lint && !linting && (!lint.valid || lint.warnings.length > 0) && (
+          {lint && (!lint.valid || lint.warnings.length > 0) && (
             <span>
               {!lint.valid && <Badge className="mr-1 border-destructive/30 bg-destructive/10 text-destructive">invalid</Badge>}
               {lint.warnings.length > 0 && (
@@ -99,7 +103,7 @@ export function SchemaPanel({
           <CodeMirror
             value={schema}
             height="300px"
-            extensions={[json()]}
+            extensions={[json(), runKeys]}
             theme={oneDark}
             basicSetup={{ foldGutter: true }}
             onChange={(value) => onSchemaChange(value)}
@@ -143,7 +147,7 @@ export function SchemaPanel({
             <CodeMirror
               value={preview}
               height="160px"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
               editable={false}
             />
@@ -151,8 +155,8 @@ export function SchemaPanel({
         )}
       </TabsContent>
 
-      {lint && !linting && (lint.errors.length > 0 || lint.warnings.length > 0) && (
-        <div className="mt-2 flex flex-col gap-2">
+      {lint && (lint.errors.length > 0 || lint.warnings.length > 0) && (
+        <div className={cn("mt-2 flex flex-col gap-2", stale && "opacity-60")}>
           {lint.errors.map((e, i) => (
             <Alert key={`e${i}`} variant="destructive">
               <AlertTitle>Schema error</AlertTitle>

@@ -1,13 +1,27 @@
 // The Ask request: the POST /ask body built from a Draft. Run, codegen, lint
 // and the payload meter all read from one build, so they cannot drift.
 
-import type { Draft, Part } from "@/lib/types";
+import type { Draft, Part, Settings } from "@/lib/types";
 
 export type AskBody = Record<string, unknown>;
 
 export type AskRequest =
   | { ok: true; body: AskBody; json: string; bytes: number }
   | { ok: false; error: string };
+
+/** Fills empty settings from the server's defaults. */
+export function resolveSettings(settings: Settings, serverDefaults: Partial<Settings>): Settings {
+  const provider = settings.provider || String(serverDefaults.provider ?? "");
+  // The server's model and base URL belong to its own provider.
+  const own = provider === serverDefaults.provider;
+  return {
+    ...settings,
+    provider,
+    model: settings.model.trim() || (own ? String(serverDefaults.model ?? "").trim() : ""),
+    baseURL: settings.baseURL.trim() || (own ? String(serverDefaults.baseURL ?? "").trim() : ""),
+    maxScoreLevels: settings.maxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? ""),
+  };
+}
 
 /** Builds the Ask request from a Draft whose settings already hold server defaults. */
 export function buildAskRequest(draft: Draft): AskRequest {
@@ -41,6 +55,11 @@ export function buildAskRequest(draft: Draft): AskRequest {
   }
   const json = JSON.stringify(body, null, 2);
   return { ok: true, body, json, bytes: new Blob([json]).size };
+}
+
+/** Builds the Ask request from a Draft, filling settings from server defaults. */
+export function askFromDraft(draft: Draft, serverDefaults: Partial<Settings>): AskRequest {
+  return buildAskRequest({ ...draft, settings: resolveSettings(draft.settings, serverDefaults) });
 }
 
 /** The POST /schema/lint body: the Ask request fields that change lint results. */

@@ -1,4 +1,4 @@
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useState } from "react";
+import { elapsedLabel, stoppedLabel, useElapsed } from "@/lib/run";
 import { copyText } from "@/lib/store";
 
 export interface RunState {
@@ -21,16 +22,21 @@ export interface RunState {
   requestPreview: string;
 }
 
-export function ResponsePanel({ state }: { state: RunState }) {
+// Mounts when a run starts, so the timer starts at 0 each run.
+function RunningBadge() {
+  return <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running… {elapsedLabel(useElapsed())}</Badge>;
+}
+
+export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Extension }) {
   const { running, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
   const [tab, setTab] = useState("response");
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
         {running ? (
-          <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running…</Badge>
+          <RunningBadge />
         ) : cancelled ? (
-          <Badge variant="outline">Stopped</Badge>
+          <Badge variant="outline">{stoppedLabel(latencyMs ?? 0)}</Badge>
         ) : status !== null ? (
           <>
             <Badge
@@ -75,7 +81,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
             <CodeMirror
               value={responseText || "// run a request to see the response"}
               height="100%"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
               editable={false}
               className="h-full min-h-0"
@@ -92,7 +98,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
             <CodeMirror
               value={requestPreview}
               height="100%"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
               editable={false}
               className="h-full min-h-0"
