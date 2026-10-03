@@ -38,6 +38,7 @@ export default function App() {
   const [run, setRun] = useState<RunState>(IDLE_STATE);
   const [configLoaded, setConfigLoaded] = useState(false);
   const [connectionOpen, setConnectionOpen] = useState(false);
+  const [connectionDecided, setConnectionDecided] = useState(false);
   const abortController = useRef<AbortController | null>(null);
 
   const effectiveSettings = useMemo(
@@ -110,11 +111,11 @@ export default function App() {
   const canRun = !run.running && blocker === null;
 
   // Once the server defaults are known, open the Connection card if it needs input.
-  const connectionNeedsInput = connectionMissing({ model, baseURL, jevjam });
-  useEffect(() => {
-    if (configLoaded) setConnectionOpen(connectionNeedsInput);
-    // Only the first load decides; later edits must not move the card.
-  }, [configLoaded]);
+  // Only that first look decides; later edits must not move the card.
+  if (configLoaded && !connectionDecided) {
+    setConnectionDecided(true);
+    setConnectionOpen(connectionMissing({ model, baseURL, jevjam }));
+  }
 
   const runRequest = async () => {
     const latest = askFromDraft(draft, serverDefaults);
