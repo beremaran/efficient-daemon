@@ -249,11 +249,11 @@ export default function App() {
             </CardContent>
           </Card>
 
-          <Card id={SCHEMA_CARD_ID} tabIndex={-1} className="outline-none focus-visible:ring-2 focus-visible:ring-ring">
+          <Card id={SCHEMA_CARD_ID} tabIndex={-1} className="flex flex-1 flex-col outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Response schema</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-1 flex-col">
               <SchemaPanel
                 schema={draft.schema}
                 onSchemaChange={(schema) => setDraft({ ...draft, schema })}

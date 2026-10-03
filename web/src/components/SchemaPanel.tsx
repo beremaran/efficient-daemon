@@ -70,7 +70,7 @@ export function SchemaPanel({
   };
 
   return (
-    <Tabs value={mode} onValueChange={(v) => setMode(v as "edit" | "generate")} className="flex flex-col">
+    <Tabs value={mode} onValueChange={(v) => setMode(v as "edit" | "generate")} className="flex flex-1 flex-col">
       <div className="flex items-center justify-between gap-2">
         <TabsList>
           <TabsTrigger value="edit">Edit</TabsTrigger>
@@ -79,11 +79,12 @@ export function SchemaPanel({
         <LintStatus lint={lint} linting={linting} />
       </div>
 
-      <TabsContent value="edit" className="mt-2 min-h-0">
-        <div className="h-full min-h-[300px] overflow-hidden rounded-md border">
+      <TabsContent value="edit" className="mt-2 min-h-[300px]">
+        <div className="h-full overflow-hidden rounded-md border">
           <CodeMirror
             value={schema}
-            height="300px"
+            height="100%"
+            minHeight="300px"
             extensions={[json()]}
             theme={oneDark}
             basicSetup={{ foldGutter: true }}
