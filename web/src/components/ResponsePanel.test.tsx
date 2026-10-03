@@ -67,3 +67,11 @@ describe("ResponsePanel download", () => {
     expect(html).toContain("Download</button>");
   });
 });
+
+describe("ResponsePanel terms", () => {
+  it("names the request tab Ask request", () => {
+    const html = renderToStaticMarkup(<ResponsePanel state={base} />);
+    expect(html).toContain(">Ask request</button>");
+    expect(html).not.toMatch(/request body|payload/i);
+  });
+});

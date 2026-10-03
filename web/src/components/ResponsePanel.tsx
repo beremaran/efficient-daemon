@@ -81,7 +81,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
         <TabsList className="self-end">
           <TabsTrigger value="response">Response</TabsTrigger>
           {answers && <TabsTrigger value="answers">Answers</TabsTrigger>}
-          <TabsTrigger value="request">Request body</TabsTrigger>
+          <TabsTrigger value="request">Ask request</TabsTrigger>
         </TabsList>
         <TabsContent value="response" className="mt-0 flex min-h-0 flex-1 flex-col">
           {noRunYet ? (
