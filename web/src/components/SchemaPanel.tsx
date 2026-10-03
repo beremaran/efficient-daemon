@@ -2,6 +2,8 @@ import { useMemo, useState } from "react";
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { EditorHint } from "@/components/editor";
+import { editorProps } from "@/lib/editor";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -102,9 +104,11 @@ export function SchemaPanel({
             extensions={[json()]}
             theme={oneDark}
             basicSetup={{ foldGutter: true }}
+            {...editorProps(false)}
             onChange={(value) => onSchemaChange(value)}
           />
         </div>
+        <EditorHint />
       </TabsContent>
 
       <TabsContent value="generate" className="mt-2 flex flex-col gap-2 min-h-0">
@@ -145,7 +149,7 @@ export function SchemaPanel({
               height="160px"
               extensions={[json()]}
               theme={oneDark}
-              editable={false}
+              {...editorProps(true)}
             />
           </div>
         )}

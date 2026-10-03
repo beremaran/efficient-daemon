@@ -1,6 +1,7 @@
 import CodeMirror from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { editorProps } from "@/lib/editor";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -97,7 +98,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
                 height="100%"
                 extensions={[json()]}
                 theme={oneDark}
-                editable={false}
+                {...editorProps(true)}
                 className="h-full min-h-0"
               />
             </div>
@@ -115,7 +116,7 @@ export function ResponsePanel({ state }: { state: RunState }) {
               height="100%"
               extensions={[json()]}
               theme={oneDark}
-              editable={false}
+              {...editorProps(true)}
               className="h-full min-h-0"
             />
           </div>

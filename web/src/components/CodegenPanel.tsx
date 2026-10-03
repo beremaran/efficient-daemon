@@ -6,6 +6,7 @@ import { javascript } from "@codemirror/legacy-modes/mode/javascript";
 import { python } from "@codemirror/legacy-modes/mode/python";
 import { shell } from "@codemirror/legacy-modes/mode/shell";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { editorProps } from "@/lib/editor";
 import { CopyButton } from "@/components/CopyButton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { elideBase64, generateSnippets } from "@/lib/codegen";
@@ -73,7 +74,7 @@ export function CodegenPanel({
           maxHeight="100%"
           extensions={[LANGUAGE_EXTENSIONS[lang]]}
           theme={oneDark}
-          editable={false}
+          {...editorProps(true)}
           className="h-full min-h-0 text-xs"
           basicSetup={{ lineNumbers: true, foldGutter: false }}
         />
