@@ -35,6 +35,8 @@ export function runBlocker(i: RunInput): string | null {
   if (!i.model && !i.jevjam) return "Add a model in Connection & sampling";
   if (!i.baseURL) return "Add a base URL in Connection & sampling";
   if (!i.parts.some(hasContent)) return "Add a Part to the user message";
+  const empty = i.parts.findIndex((p) => !hasContent(p));
+  if (empty >= 0) return `Fill or remove part ${empty + 1}`;
   if (!i.request.ok || i.lintErrors > 0) {
     const n = i.lintErrors;
     return n > 0 ? `${n} schema issue${n > 1 ? "s" : ""} — fix before running` : "Fix the response schema";

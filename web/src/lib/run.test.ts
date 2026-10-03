@@ -49,6 +49,14 @@ describe("runBlocker", () => {
     );
   });
 
+  it("names the first empty Part when others have content", () => {
+    const parts: RunInput["parts"] = [
+      { id: "a", kind: "text", text: "hi" },
+      { id: "b", kind: "pdf", pdf: "", fileName: "a.pdf" },
+    ];
+    expect(runBlocker(input({ parts }))).toBe("Fill or remove part 2");
+  });
+
   it("counts schema issues", () => {
     const lint = { ...okLint, errors: ["a", "b"] };
     expect(runBlocker(input({ lint, lintErrors: 2 }))).toBe("2 schema issues — fix before running");
