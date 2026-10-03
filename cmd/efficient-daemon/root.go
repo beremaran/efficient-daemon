@@ -1,6 +1,7 @@
 package main
 
 import (
+	"cmp"
 	"context"
 	"errors"
 	"fmt"
@@ -122,7 +123,7 @@ func newSchemaCommand() *cobra.Command {
 }
 
 // apiKeyHelp documents the per-provider key fallbacks.
-const apiKeyHelp = "API key (optional; falls back to OPENAI_API_KEY, or JEVJAM_API_KEY for jevjam)"
+const apiKeyHelp = "API key (optional; falls back to OPENAI_API_KEY, or JEVJAM_API_KEY for jevjam ask)"
 
 // llmOnlyFlags configure LLM sampling, which jevjam does not do.
 var llmOnlyFlags = []string{"system", "system-file", "reasoning-effort", "temperature", "max-tokens"}
@@ -211,7 +212,7 @@ func run(cmd *cobra.Command, opts options, args []string) error {
 		if err != nil {
 			return err
 		}
-		raw, _, err := jevjam.Ask(cmd.Context(), jevjam.Config{BaseURL: opts.baseURL, APIKey: opts.apiKey, Model: opts.model, Timeout: opts.timeout}, plan, messages)
+		raw, _, err := jevjam.Ask(cmd.Context(), jevjam.Config{BaseURL: opts.baseURL, APIKey: cmp.Or(opts.apiKey, os.Getenv("JEVJAM_API_KEY")), Model: opts.model, Timeout: opts.timeout}, plan, messages)
 		if err != nil {
 			return fmt.Errorf("ask jevjam: %w", err)
 		}

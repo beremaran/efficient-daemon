@@ -15,7 +15,6 @@ import (
 	"maps"
 	"math"
 	"net/http"
-	"os"
 	"slices"
 	"strconv"
 	"strings"
@@ -40,7 +39,7 @@ const (
 type Config struct {
 	// BaseURL is the server root; /v1/systemone is appended.
 	BaseURL string
-	// APIKey falls back to JEVJAM_API_KEY, never OPENAI_API_KEY.
+	// APIKey is sent as a bearer token when set.
 	APIKey string
 	// Model is optional; jevjam routes the request itself when it is empty.
 	Model string
@@ -71,10 +70,10 @@ type field struct {
 // answer holds the fields of a jevjam answer that map back to a value.
 // Pointers tell a missing or null value apart from a real zero.
 type answer struct {
-	Choice        *string            `json:"choice"`
-	Score         *float64           `json:"score"`
-	Noul          *float64           `json:"noul"`
-	Probabilities map[string]float64 `json:"probabilities"`
+	Choice        *string             `json:"choice"`
+	Score         *float64            `json:"score"`
+	Noul          *float64            `json:"noul"`
+	Probabilities map[string]*float64 `json:"probabilities"`
 }
 
 // ValidateMaxScoreLevels checks a max-score-levels setting.
@@ -219,11 +218,15 @@ func intKeyword(prop map[string]any, key string) (int64, error) {
 	if !ok {
 		return 0, fmt.Errorf("integer properties need a numeric %s", key)
 	}
-	value, err := number.Int64()
-	if err != nil {
+	if value, err := number.Int64(); err == nil {
+		return value, nil
+	}
+	// Accept integral forms such as 1.0 or 1e0, within float64's exact range.
+	value, err := number.Float64()
+	if err != nil || value != math.Trunc(value) || math.Abs(value) > 1<<53 {
 		return 0, fmt.Errorf("%s must be a whole number", key)
 	}
-	return value, nil
+	return int64(value), nil
 }
 
 // values maps jevjam answers back into a schema-shaped JSON object.
@@ -241,12 +244,20 @@ func (p Plan) values(answers map[string]answer) (json.RawMessage, error) {
 			out[name] = *a.Choice
 		case f.question.Type == "score" && f.mean && a.Score != nil:
 			out[name] = f.levels[min(max(int(math.Round(*a.Score)), 0), len(f.levels)-1)]
-		case f.question.Type == "score" && !f.mean && len(a.Probabilities) == len(f.levels):
-			top := 0
+		case f.question.Type == "score" && !f.mean:
+			top, best := -1, math.Inf(-1)
 			for i := range f.levels {
-				if a.Probabilities[strconv.Itoa(i)] > a.Probabilities[strconv.Itoa(top)] {
-					top = i
+				p := a.Probabilities[strconv.Itoa(i)]
+				if p == nil || math.IsNaN(*p) {
+					top = -1
+					break
 				}
+				if *p > best {
+					top, best = i, *p
+				}
+			}
+			if top < 0 {
+				return nil, fmt.Errorf("jevjam returned incomplete probabilities for %q", name)
 			}
 			out[name] = f.levels[top]
 		default:
@@ -287,7 +298,7 @@ func Ask(ctx context.Context, cfg Config, plan Plan, messages []openai.ChatCompl
 		return nil, nil, err
 	}
 	req.Header.Set("Content-Type", "application/json")
-	if key := cmp.Or(cfg.APIKey, os.Getenv("JEVJAM_API_KEY")); key != "" {
+	if key := strings.TrimSpace(cfg.APIKey); key != "" {
 		req.Header.Set("Authorization", "Bearer "+key)
 	}
 	resp, err := http.DefaultClient.Do(req)
