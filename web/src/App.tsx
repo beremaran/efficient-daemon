@@ -18,7 +18,7 @@ import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, r
 import { withPartIds } from "@/lib/parts";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import { errorMessage } from "@/lib/utils";
-import type { RunRecord, Settings } from "@/lib/types";
+import type { Draft, RunRecord, Settings } from "@/lib/types";
 
 const IDLE_STATE: RunState = {
   running: false,
@@ -32,7 +32,9 @@ const IDLE_STATE: RunState = {
 
 export default function App() {
   const [draft, setDraft, keepKey, setKeepKey] = useDraft();
-  const { history, push, clear } = useHistory();
+  const { history, saveFailed, push, clear } = useHistory();
+  // The Draft that the last Restore replaced.
+  const [undoDraft, setUndoDraft] = useState<Draft | null>(null);
   const [serverDefaults, setServerDefaults] = useState<Partial<Settings>>({});
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
   const [linting, setLinting] = useState(false);
@@ -227,12 +229,19 @@ export default function App() {
     if (canRun) void runRequest();
   });
 
-  const restore = (record: RunRecord) =>
+  const restore = (record: RunRecord) => {
+    setUndoDraft(draft);
     setDraft({
       ...record.draft,
       parts: withPartIds(record.draft.parts),
       settings: { ...record.draft.settings, apiKey: draft.settings.apiKey },
     });
+  };
+  const undoRestore = () => {
+    if (!undoDraft) return;
+    setDraft(undoDraft);
+    setUndoDraft(null);
+  };
 
   return (
     <div className="flex h-screen flex-col bg-muted/30">
@@ -339,7 +348,13 @@ export default function App() {
                   <CodegenPanel request={request} parts={deferredDraft.parts} schema={deferredDraft.schema} runKeys={runKeys} />
                 </TabsContent>
                 <TabsContent value="history">
-                  <HistoryPanel history={history} onRestore={restore} onClear={clear} />
+                  <HistoryPanel
+                    history={history}
+                    saveFailed={saveFailed}
+                    onRestore={restore}
+                    onUndo={undoDraft ? undoRestore : undefined}
+                    onClear={clear}
+                  />
                 </TabsContent>
               </CardContent>
             </Card>

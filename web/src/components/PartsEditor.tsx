@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, Image as ImageIcon, Plus, Trash2, Type } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,9 +9,10 @@ import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
+import { filesToPick } from "@/lib/history";
 import { MAX_BODY_MB, dragHasFiles, pastedImage, readDroppedFile, readPartFile } from "@/lib/media";
 import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, switchImageSource } from "@/lib/parts";
-import { MAX_BODY_BYTES, type Part } from "@/lib/types";
+import { EMPTY_DRAFT, MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
 /** How long Undo stays after removing a Part with a file. */
@@ -72,8 +74,16 @@ export function PartsEditor({
     setFocusId(part.id);
   };
 
+  const toPick = filesToPick({ ...EMPTY_DRAFT, parts });
+
   return (
     <div ref={rootRef} className="flex flex-col gap-2">
+      {toPick.length > 0 && (
+        <Alert>
+          <AlertTitle>Pick these files again</AlertTitle>
+          <AlertDescription>History keeps file names, not file data: {toPick.join(", ")}</AlertDescription>
+        </Alert>
+      )}
       {parts.map((part, i) => (
         <PartEditor
           key={part.id}

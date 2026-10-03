@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { withPartIds } from "@/lib/parts";
 import {
   EMPTY_DRAFT,
@@ -6,6 +6,7 @@ import {
   type RunRecord,
   type Settings,
 } from "@/lib/types";
+import { stripFileData } from "@/lib/history";
 
 const DRAFT_KEY = "efficient-daemon.draft.v1";
 const HISTORY_KEY = "efficient-daemon.history.v2";
@@ -85,28 +86,33 @@ export function loadHistory(): RunRecord[] {
   }
 }
 
+/** Saves history to browser storage. On failure it leaves the stored history as it was. */
+export function saveHistory(history: RunRecord[]): boolean {
+  try {
+    localStorage.setItem(HISTORY_KEY, JSON.stringify(history));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function useHistory() {
   const [history, setHistory] = useState<RunRecord[]>(loadHistory);
+  const [saveFailed, setSaveFailed] = useState(false);
+  // Runs finish late, so push reads the latest history from a ref, not a stale closure.
+  const latest = useRef(history);
 
   const push = useCallback((record: RunRecord) => {
-    setHistory((prev) => {
-      const next = [withoutKey(record), ...prev].slice(0, MAX_HISTORY);
-      try {
-        localStorage.setItem(HISTORY_KEY, JSON.stringify(next));
-      } catch {
-        // Drop history persistence rather than crashing on quota.
-        try {
-          localStorage.removeItem(HISTORY_KEY);
-        } catch {
-          // ignore
-        }
-      }
-      return next;
-    });
+    const next = [withoutKey({ ...record, draft: stripFileData(record.draft) }), ...latest.current].slice(0, MAX_HISTORY);
+    latest.current = next;
+    setHistory(next);
+    setSaveFailed(!saveHistory(next));
   }, []);
 
   const clear = useCallback(() => {
+    latest.current = [];
     setHistory([]);
+    setSaveFailed(false);
     try {
       localStorage.removeItem(HISTORY_KEY);
     } catch {
@@ -114,7 +120,7 @@ export function useHistory() {
     }
   }, []);
 
-  return { history, push, clear };
+  return { history, saveFailed, push, clear };
 }
 
 /** Debounces schema linting so typing doesn't hammer the server. */
