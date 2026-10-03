@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { PartsEditor } from "@/components/PartsEditor";
 import { SchemaPanel } from "@/components/SchemaPanel";
+import { SCHEMA_CARD_ID, SchemaIssuesLink } from "@/components/SchemaIssuesLink";
 import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
@@ -248,7 +249,7 @@ export default function App() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id={SCHEMA_CARD_ID} tabIndex={-1} className="outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Response schema</CardTitle>
             </CardHeader>
@@ -309,9 +310,7 @@ function Header({
       <Badge variant="outline">workbench</Badge>
       <span className="flex-1" />
       {lintIssues > 0 && (
-        <span className="text-xs text-destructive">
-          {lintIssues} schema issue{lintIssues > 1 ? "s" : ""} — fix before running
-        </span>
+        <SchemaIssuesLink count={lintIssues} />
       )}
       {running ? (
         <Button variant="destructive" onClick={onStop}>
