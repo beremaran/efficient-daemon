@@ -1,7 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { PartEditor, PartsEditor } from "@/components/PartsEditor";
+import { PartEditor, PartsEditor, UndoNotice } from "@/components/PartsEditor";
 import { checkImageFile, readPartFile } from "@/lib/media";
 import { newPart } from "@/lib/parts";
 import { MAX_IMAGE_BYTES, type Part } from "@/lib/types";
@@ -121,5 +121,20 @@ describe("button names", () => {
     const html = renderToStaticMarkup(<PartsEditor parts={parts} bytes={null} onPartsChange={() => {}} />);
     for (const name of ["Move part 1 up", "Move part 1 down", "Remove part 1", "Move part 2 up", "Move part 2 down", "Remove part 2"])
       expect(html).toContain(`aria-label="${name}"`);
+  });
+});
+
+describe("undo notice", () => {
+  it("names the file and offers Undo as a status", () => {
+    const html = renderToStaticMarkup(<UndoNotice label="Removed doc.pdf" onUndo={() => {}} />);
+    expect(html).toContain(`role="status"`);
+    expect(html).toContain("Removed doc.pdf");
+    expect(html).toContain("Undo");
+  });
+
+  it("shows nothing before a removal", () => {
+    const parts = [{ ...newPart("pdf"), pdf: "AAAA", fileName: "doc.pdf" }];
+    const html = renderToStaticMarkup(<PartsEditor parts={parts} bytes={null} onPartsChange={() => {}} />);
+    expect(html).not.toContain("Undo");
   });
 });

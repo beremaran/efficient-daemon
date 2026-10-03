@@ -18,6 +18,14 @@ export const withPartIds = (parts: Part[]): Part[] =>
 
 export const removePart = (parts: Part[], index: number): Part[] => parts.filter((_, i) => i !== index);
 
+/** True when the Part holds an uploaded file. */
+export const hasFile = (part: Part): boolean =>
+  part.kind === "pdf" ? !!part.pdf : part.kind === "image" && part.source === "upload" && !!part.image;
+
+/** Puts a removed Part back at `index`, or at the end if the list shrank. */
+export const restorePart = (parts: Part[], part: Part, index: number): Part[] =>
+  [...parts.slice(0, index), part, ...parts.slice(index)];
+
 /** Id of the Part that takes focus after removing the one at `index`: the next, else the previous. */
 export const focusAfterRemove = (parts: Part[], index: number): string | undefined =>
   (parts[index + 1] ?? parts[index - 1])?.id;

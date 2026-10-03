@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { focusAfterRemove, movePart, newPart, removePart, withPartIds } from "@/lib/parts";
+import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, withPartIds } from "@/lib/parts";
 import { loadDraft } from "@/lib/store";
 
 const texts = (parts: { text?: string }[]) => parts.map((p) => p.text);
@@ -66,5 +66,29 @@ describe("focusAfterRemove", () => {
 
   it("picks nothing when no Parts remain", () => {
     expect(focusAfterRemove(parts.slice(0, 1), 0)).toBeUndefined();
+  });
+});
+
+describe("undo remove", () => {
+  const a = { ...newPart("text"), text: "a" };
+  const file = { ...newPart("pdf"), pdf: "AAAA", fileName: "doc.pdf" };
+  const c = { ...newPart("text"), text: "c" };
+
+  it("offers undo only for a Part with an uploaded file", () => {
+    expect(hasFile(file)).toBe(true);
+    expect(hasFile({ ...newPart("image"), source: "upload", image: "AAAA" })).toBe(true);
+    expect(hasFile({ ...newPart("image"), source: "url", image: "https://x/y.png" })).toBe(false);
+    expect(hasFile(newPart("pdf"))).toBe(false);
+    expect(hasFile(a)).toBe(false);
+  });
+
+  it("puts the Part back in the same place with its file", () => {
+    const parts = [a, file, c];
+    const after = removePart(parts, 1);
+    expect(restorePart(after, file, 1)).toEqual(parts);
+  });
+
+  it("puts the Part at the end when the list shrank", () => {
+    expect(restorePart([a], file, 5)).toEqual([a, file]);
   });
 });

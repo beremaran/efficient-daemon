@@ -9,9 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { MAX_BODY_MB, readPartFile } from "@/lib/media";
-import { focusAfterRemove, movePart, newPart, removePart } from "@/lib/parts";
+import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart } from "@/lib/parts";
 import { MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
+
+/** How long Undo stays after removing a Part with a file. */
+const UNDO_MS = 8000;
 
 export function PartsEditor({
   parts,
@@ -48,6 +51,15 @@ export function PartsEditor({
     (target as HTMLElement | null)?.focus();
   }, [parts]);
 
+  // The last removed Part that held a file; Undo offers it back for a few seconds.
+  const [removed, setRemoved] = useState<{ part: Part; index: number }>();
+  const undoTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const dropUndo = () => {
+    clearTimeout(undoTimer.current);
+    setRemoved(undefined);
+  };
+  useEffect(() => () => clearTimeout(undoTimer.current), []);
+
   const setPart = (index: number, patch: Partial<Part>) => {
     const next = [...parts];
     next[index] = { ...next[index], ...patch };
@@ -75,11 +87,26 @@ export function PartsEditor({
           onRemove={() => {
             setFileError(part.id);
             change(removePart(parts, i));
+            dropUndo();
+            if (hasFile(part)) {
+              setRemoved({ part, index: i });
+              undoTimer.current = setTimeout(() => setRemoved(undefined), UNDO_MS);
+            }
             afterRemove.current = { id: focusAfterRemove(parts, i) };
           }}
           onMove={(delta) => change(movePart(parts, i, delta))}
         />
       ))}
+
+      {removed && (
+        <UndoNotice
+          label={`Removed ${removed.part.fileName ?? "file"}`}
+          onUndo={() => {
+            change(restorePart(parts, removed.part, removed.index));
+            dropUndo();
+          }}
+        />
+      )}
 
       {bytes !== null && <PayloadMeter totalBytes={bytes} />}
 
@@ -94,6 +121,17 @@ export function PartsEditor({
           <FileText /> PDF
         </Button>
       </div>
+    </div>
+  );
+}
+
+export function UndoNotice({ label, onUndo }: { label: string; onUndo: () => void }) {
+  return (
+    <div role="status" className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+      <span className="truncate">{label}</span>
+      <Button type="button" variant="outline" size="sm" onClick={onUndo}>
+        Undo
+      </Button>
     </div>
   );
 }
