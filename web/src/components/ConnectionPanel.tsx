@@ -11,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { OptionalNumberField, TextField } from "@/components/fields";
 import { PROVIDERS, REASONING_EFFORTS, type Settings } from "@/lib/types";
+import { maxScoreLevelsError, maxTokensError, temperatureError } from "@/lib/validate";
 
 export interface ServerDefaults {
   model: string;
@@ -135,6 +136,7 @@ export function ConnectionPanel({
           onChange={(maxScoreLevels) => patch({ maxScoreLevels })}
           placeholder={serverDefaults.maxScoreLevels ? `server default (${serverDefaults.maxScoreLevels})` : "server default"}
           type="number"
+          error={maxScoreLevelsError(settings.maxScoreLevels)}
         />
       ) : (
         <>
@@ -153,6 +155,7 @@ export function ConnectionPanel({
             onValueChange={(temperature) => patch({ temperature })}
             min={0}
             max={2}
+            error={temperatureError(settings.temperature)}
           />
           <OptionalNumberField
             label="Max tokens"
@@ -161,6 +164,7 @@ export function ConnectionPanel({
             value={settings.maxTokens}
             onValueChange={(maxTokens) => patch({ maxTokens })}
             step={1}
+            error={maxTokensError(settings.maxTokens)}
           />
         </>
       )}
