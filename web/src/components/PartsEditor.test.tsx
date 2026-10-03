@@ -111,6 +111,15 @@ describe("focus after remove", () => {
     const html = renderToStaticMarkup(<PartsEditor parts={parts} bytes={null} onPartsChange={() => {}} />);
     for (const { id } of parts) expect(html).toContain(`data-part-id="${id}"`);
     expect(html).toContain("data-add-parts");
-    expect(html.match(/aria-label="remove part"/g)).toHaveLength(2);
+    expect(html.match(/data-remove/g)).toHaveLength(2);
+  });
+});
+
+describe("button names", () => {
+  it("name the Part and the action", () => {
+    const parts = [newPart("text"), newPart("pdf")];
+    const html = renderToStaticMarkup(<PartsEditor parts={parts} bytes={null} onPartsChange={() => {}} />);
+    for (const name of ["Move part 1 up", "Move part 1 down", "Remove part 1", "Move part 2 up", "Move part 2 down", "Remove part 2"])
+      expect(html).toContain(`aria-label="${name}"`);
   });
 });

@@ -43,7 +43,7 @@ export function PartsEditor({
     const { id } = afterRemove.current;
     afterRemove.current = undefined;
     const target = id
-      ? rootRef.current?.querySelector(`[data-part-id="${id}"] [aria-label="remove part"]`)
+      ? rootRef.current?.querySelector(`[data-part-id="${id}"] [data-remove]`)
       : rootRef.current?.querySelector("[data-add-parts] button");
     (target as HTMLElement | null)?.focus();
   }, [parts]);
@@ -152,13 +152,13 @@ export function PartEditor({
           <span className="capitalize">{part.kind === "pdf" ? "PDF" : part.kind}</span>
         </CardTitle>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => onMove(-1)} disabled={index === 0} aria-label="move up">
+          <Button variant="ghost" size="icon" onClick={() => onMove(-1)} disabled={index === 0} aria-label={`Move part ${index + 1} up`}>
             <ArrowUp />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => onMove(1)} disabled={index === count - 1} aria-label="move down">
+          <Button variant="ghost" size="icon" onClick={() => onMove(1)} disabled={index === count - 1} aria-label={`Move part ${index + 1} down`}>
             <ArrowDown />
           </Button>
-          <Button variant="ghost" size="icon" onClick={onRemove} aria-label="remove part">
+          <Button variant="ghost" size="icon" onClick={onRemove} data-remove aria-label={`Remove part ${index + 1}`}>
             <Trash2 />
           </Button>
         </div>
