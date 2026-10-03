@@ -9,7 +9,8 @@ describe("CodegenPanel copy", () => {
   it("renders the shared copy button with a role=status region", () => {
     const html = renderToStaticMarkup(<CodegenPanel request={{ ok: false, error: "x" }} parts={[]} schema="" />);
     expect(html).toMatch(/<span role="status"[^>]*><\/span>/);
-    expect(html).toContain("Copy (full, untruncated)");
+    expect(html).toContain("Copy full snippet");
+    expect(html).not.toMatch(/elided/i);
   });
 
   it("shows the failure message when the clipboard is blocked", async () => {

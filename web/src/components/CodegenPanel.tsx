@@ -60,11 +60,11 @@ export function CodegenPanel({
         </Tabs>
         <span className="flex-1" />
         <CopyButton text={current?.code ?? ""} variant="secondary" size="sm" disabled={!current}>
-          Copy (full, untruncated)
+          Copy full snippet
         </CopyButton>
       </div>
       <div className="text-xs text-muted-foreground">
-        Long base64 is elided in the display only; copying always yields the complete snippet.
+        The display shortens long base64 values; Copy full snippet copies them in full.
       </div>
       <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
         <CodeMirror
