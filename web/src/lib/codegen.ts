@@ -27,21 +27,27 @@ export function buildBody(
   schema: string,
   settings: Settings,
 ): Record<string, unknown> {
+  const s = settings;
+  const jevjam = s.provider === "jevjam";
   const body: Record<string, unknown> = { schema: JSON.parse(schema) };
-  if (system.trim()) body.system = system;
+  if (s.provider) body.provider = s.provider;
+  if (system.trim() && !jevjam) body.system = system;
   body.parts = parts.map((p) => {
     if (p.kind === "text") return { text: p.text ?? "" };
     if (p.kind === "image") return { image: p.image ?? "" };
     return { pdf: p.pdf ?? "" };
   });
-  const s = settings;
   if (s.model.trim()) body.model = s.model.trim();
   if (s.baseURL.trim()) body["base-url"] = s.baseURL.trim();
   if (s.apiKey.trim()) body["api-key"] = s.apiKey.trim();
+  if (s.timeout.trim()) body.timeout = s.timeout.trim();
+  if (jevjam) {
+    if (s.maxScoreLevels.trim()) body["max-score-levels"] = Number(s.maxScoreLevels);
+    return body;
+  }
   if (s.reasoningEffort.trim()) body["reasoning-effort"] = s.reasoningEffort.trim();
   if (s.temperatureEnabled && s.temperature.trim()) body.temperature = Number(s.temperature);
   if (s.maxTokensEnabled && s.maxTokens.trim()) body["max-tokens"] = Number(s.maxTokens);
-  if (s.timeout.trim()) body.timeout = s.timeout.trim();
   return body;
 }
 
@@ -55,6 +61,7 @@ export function generateSnippets(
   const body = buildBody(parts, system, schema, settings);
   const bodyJSON = JSON.stringify(body, null, 2);
   const s = settings;
+  const jevjam = s.provider === "jevjam";
 
   // CLI: schema via heredoc, one prompt arg, --image flags. The ask CLI has no
   // PDF flag, so PDF parts are noted as API-only.
@@ -71,15 +78,17 @@ export function generateSnippets(
     ? "# note: PDF parts are only supported over the HTTP API (see the curl tab)\n"
     : "";
   const cliFlags =
+    (s.provider ? ` \\\n  --provider ${shellQuote(s.provider)}` : "") +
     (s.model.trim() ? ` \\\n  --model ${shellQuote(s.model.trim())}` : "") +
     (s.baseURL.trim() ? ` \\\n  --base-url ${shellQuote(s.baseURL.trim())}` : "") +
     (s.apiKey.trim() ? ` \\\n  --api-key ${shellQuote(s.apiKey.trim())}` : "") +
     (s.timeout.trim() ? ` \\\n  --timeout ${shellQuote(s.timeout.trim())}` : "") +
-    (s.reasoningEffort.trim() ? ` \\\n  --reasoning-effort ${shellQuote(s.reasoningEffort.trim())}` : "") +
-    (s.temperatureEnabled && s.temperature.trim()
+    (jevjam && s.maxScoreLevels.trim() ? ` \\\n  --max-score-levels ${Number(s.maxScoreLevels)}` : "") +
+    (!jevjam && s.reasoningEffort.trim() ? ` \\\n  --reasoning-effort ${shellQuote(s.reasoningEffort.trim())}` : "") +
+    (!jevjam && s.temperatureEnabled && s.temperature.trim()
       ? ` \\\n  --temperature ${Number(s.temperature)}`
       : "") +
-    (s.maxTokensEnabled && s.maxTokens.trim() ? ` \\\n  --max-tokens ${Number(s.maxTokens)}` : "");
+    (!jevjam && s.maxTokensEnabled && s.maxTokens.trim() ? ` \\\n  --max-tokens ${Number(s.maxTokens)}` : "");
 
   const cli =
     `cat > schema.json <<'EOF'\n${schema.trim()}\nEOF\n\n` +

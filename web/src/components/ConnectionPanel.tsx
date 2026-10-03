@@ -8,7 +8,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { OptionalNumberField, TextField } from "@/components/fields";
-import { REASONING_EFFORTS, type Settings } from "@/lib/types";
+import { PROVIDERS, REASONING_EFFORTS, type Settings } from "@/lib/types";
 
 export interface ServerDefaults {
   model: string;
@@ -59,13 +59,21 @@ export function ConnectionPanel({
   serverDefaults: Partial<Settings>;
 }) {
   const patch = (p: Partial<Settings>) => onChange({ ...settings, ...p });
+  const jevjam = (settings.provider || serverDefaults.provider) === "jevjam";
   return (
     <div className="flex flex-col gap-3">
+      <SelectField
+        label="Provider"
+        value={settings.provider}
+        options={PROVIDERS}
+        onChange={(provider) => patch({ provider, model: "", baseURL: "", apiKey: "" })}
+        serverDefault={serverDefaults.provider ?? ""}
+      />
       <TextField
         label="Model"
         value={settings.model}
         onChange={(model) => patch({ model })}
-        placeholder={serverDefaults.model || "required"}
+        placeholder={serverDefaults.model || (jevjam ? "optional; jevjam routes by default" : "required")}
       />
       <TextField
         label="Base URL"
@@ -74,7 +82,9 @@ export function ConnectionPanel({
         placeholder={serverDefaults.baseURL || "required"}
       />
       <p className="text-xs text-muted-foreground">
-        Model and base URL are required here or as server defaults.
+        {jevjam
+          ? "Base URL is required here or as a server default."
+          : "Model and base URL are required here or as server defaults."}
       </p>
       <TextField
         label="API key"
@@ -88,30 +98,42 @@ export function ConnectionPanel({
         onChange={(timeout) => patch({ timeout })}
         placeholder={serverDefaults.timeout ? `server default (${serverDefaults.timeout})` : "server default"}
       />
-      <SelectField
-        label="Reasoning effort"
-        value={settings.reasoningEffort}
-        options={REASONING_EFFORTS}
-        onChange={(reasoningEffort) => patch({ reasoningEffort })}
-        serverDefault={serverDefaults.reasoningEffort ?? ""}
-      />
-      <OptionalNumberField
-        label="Temperature"
-        enabled={settings.temperatureEnabled}
-        onEnabledChange={(temperatureEnabled) => patch({ temperatureEnabled })}
-        value={settings.temperature}
-        onValueChange={(temperature) => patch({ temperature })}
-        min={0}
-        max={2}
-      />
-      <OptionalNumberField
-        label="Max tokens"
-        enabled={settings.maxTokensEnabled}
-        onEnabledChange={(maxTokensEnabled) => patch({ maxTokensEnabled })}
-        value={settings.maxTokens}
-        onValueChange={(maxTokens) => patch({ maxTokens })}
-        step={1}
-      />
+      {jevjam ? (
+        <TextField
+          label="Max score levels"
+          value={settings.maxScoreLevels}
+          onChange={(maxScoreLevels) => patch({ maxScoreLevels })}
+          placeholder={serverDefaults.maxScoreLevels ? `server default (${serverDefaults.maxScoreLevels})` : "server default"}
+          type="number"
+        />
+      ) : (
+        <>
+          <SelectField
+            label="Reasoning effort"
+            value={settings.reasoningEffort}
+            options={REASONING_EFFORTS}
+            onChange={(reasoningEffort) => patch({ reasoningEffort })}
+            serverDefault={serverDefaults.reasoningEffort ?? ""}
+          />
+          <OptionalNumberField
+            label="Temperature"
+            enabled={settings.temperatureEnabled}
+            onEnabledChange={(temperatureEnabled) => patch({ temperatureEnabled })}
+            value={settings.temperature}
+            onValueChange={(temperature) => patch({ temperature })}
+            min={0}
+            max={2}
+          />
+          <OptionalNumberField
+            label="Max tokens"
+            enabled={settings.maxTokensEnabled}
+            onEnabledChange={(maxTokensEnabled) => patch({ maxTokensEnabled })}
+            value={settings.maxTokens}
+            onValueChange={(maxTokens) => patch({ maxTokens })}
+            step={1}
+          />
+        </>
+      )}
     </div>
   );
 }

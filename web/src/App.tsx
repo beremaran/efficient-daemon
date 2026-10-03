@@ -22,6 +22,7 @@ const IDLE_STATE: RunState = {
   status: null,
   latencyMs: null,
   responseText: "",
+  answers: null,
   error: null,
   requestPreview: "",
 };
@@ -36,14 +37,21 @@ export default function App() {
   const abortController = useRef<AbortController | null>(null);
 
   const debouncedSchema = useDebounced(draft.schema, 300);
-  const effectiveSettings = useMemo(
-    () => ({
+  const debouncedMaxScoreLevels = useDebounced(draft.settings.maxScoreLevels, 300);
+  const effectiveSettings = useMemo(() => {
+    const provider = draft.settings.provider || String(serverDefaults.provider ?? "");
+    // The server's model and base URL belong to its own provider (see resolve).
+    const own = provider === serverDefaults.provider;
+    return {
       ...draft.settings,
-      model: draft.settings.model.trim() || String(serverDefaults.model ?? "").trim(),
-      baseURL: draft.settings.baseURL.trim() || String(serverDefaults.baseURL ?? "").trim(),
-    }),
-    [draft.settings, serverDefaults],
-  );
+      provider,
+      model: draft.settings.model.trim() || (own ? String(serverDefaults.model ?? "").trim() : ""),
+      baseURL: draft.settings.baseURL.trim() || (own ? String(serverDefaults.baseURL ?? "").trim() : ""),
+      maxScoreLevels: draft.settings.maxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? ""),
+    };
+  }, [draft.settings, serverDefaults]);
+  const lintMaxScoreLevels =
+    debouncedMaxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? "");
 
   // Server defaults for ghost text; no api-key by design.
   useEffect(() => {
@@ -56,21 +64,23 @@ export default function App() {
           baseURL: cfg["base-url"] ?? "",
           reasoningEffort: cfg["reasoning-effort"] ?? "",
           timeout: prettyDuration(cfg.timeout ?? ""),
+          provider: cfg.provider ?? "",
+          maxScoreLevels: String(cfg["max-score-levels"] ?? ""),
         });
       })
       .catch(() => {});
   }, []);
 
-  const runLint = useCallback(async (schema: string) => {
+  const runLint = useCallback(async (schema: string, provider: string, maxScoreLevels: string) => {
     setLinting(true);
-    const result = await lintSchema(schema);
+    const result = await lintSchema(schema, provider, maxScoreLevels);
     setLintResult(result);
     setLinting(false);
   }, []);
 
   useEffect(() => {
-    void runLint(debouncedSchema);
-  }, [debouncedSchema, runLint]);
+    void runLint(debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels);
+  }, [debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels, runLint]);
 
   const requestPreview = useMemo(() => {
     try {
@@ -83,9 +93,10 @@ export default function App() {
   const lintErrors = lintResult && !linting ? lintResult.errors : [];
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
+  const jevjam = effectiveSettings.provider === "jevjam";
   const canRun =
     !run.running &&
-    !!model &&
+    (!!model || jevjam) &&
     !!baseURL &&
     draft.parts.length > 0 &&
     lintErrors.length === 0 &&
@@ -110,17 +121,25 @@ export default function App() {
       const res = await fetch("/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
+        // jevjam's raw answers come wrapped with the result in the body.
+        body: JSON.stringify(jevjam ? { ...(body as object), answers: true } : body),
         signal: controller.signal,
       });
       const latencyHeader = res.headers.get("X-Latency-Ms");
       const latencyMs = latencyHeader ? Number(latencyHeader) : null;
-      const text = await res.text();
+      let text = await res.text();
+      let answers: string | null = null;
+      if (jevjam && res.ok) {
+        const wrapped = safeParse(text) as { result?: unknown; answers?: unknown };
+        text = JSON.stringify(wrapped.result, null, 2);
+        answers = JSON.stringify(wrapped.answers);
+      }
       const state: RunState = {
         running: false,
         status: res.status,
         latencyMs,
         responseText: text,
+        answers,
         error: res.ok ? null : text,
         requestPreview: requestPreview,
       };
@@ -146,6 +165,7 @@ export default function App() {
         status: null,
         latencyMs: null,
         responseText: "",
+        answers: null,
         error: message,
         requestPreview: requestPreview,
       });
@@ -168,6 +188,8 @@ export default function App() {
     const req = record.request as Record<string, unknown>;
     const settings: Settings = {
       ...draft.settings,
+      provider: (req.provider as string) ?? "",
+      maxScoreLevels: req["max-score-levels"] !== undefined ? String(req["max-score-levels"]) : "",
       model: (req.model as string) ?? "",
       baseURL: (req["base-url"] as string) ?? "",
       apiKey: (req["api-key"] as string) ?? "",
@@ -215,24 +237,26 @@ export default function App() {
             </details>
           </Card>
 
-          <Card>
-            <details className="group">
-              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
-                <CardHeader className="flex-row items-center justify-between pb-4">
-                  <CardTitle className="text-sm">System message</CardTitle>
-                  <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
-                </CardHeader>
-              </summary>
-              <CardContent>
-                <Textarea
-                  value={draft.system}
-                  onChange={(e) => setDraft({ ...draft, system: e.target.value })}
-                  placeholder="Optional system message…"
-                  className="min-h-[60px]"
-                />
-              </CardContent>
-            </details>
-          </Card>
+          {!jevjam && (
+            <Card>
+              <details className="group">
+                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                  <CardHeader className="flex-row items-center justify-between pb-4">
+                    <CardTitle className="text-sm">System message</CardTitle>
+                    <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
+                  </CardHeader>
+                </summary>
+                <CardContent>
+                  <Textarea
+                    value={draft.system}
+                    onChange={(e) => setDraft({ ...draft, system: e.target.value })}
+                    placeholder="Optional system message…"
+                    className="min-h-[60px]"
+                  />
+                </CardContent>
+              </details>
+            </Card>
+          )}
 
           <Card>
             <CardHeader className="pb-2">
@@ -240,7 +264,7 @@ export default function App() {
             </CardHeader>
             <CardContent>
               <PartsEditor
-                system={draft.system}
+                system={jevjam ? "" : draft.system}
                 parts={draft.parts}
                 onPartsChange={(parts) => setDraft({ ...draft, parts })}
                 schemaText={draft.schema}

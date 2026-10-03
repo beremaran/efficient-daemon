@@ -13,6 +13,8 @@ export interface Part {
 }
 
 export interface Settings {
+  /** "" keeps the server default. */
+  provider: string;
   model: string;
   baseURL: string;
   apiKey: string;
@@ -22,6 +24,8 @@ export interface Settings {
   maxTokensEnabled: boolean;
   maxTokens: string;
   timeout: string;
+  /** jevjam only; "" keeps the server default. */
+  maxScoreLevels: string;
 }
 
 export interface Draft {
@@ -42,6 +46,8 @@ export interface RunRecord {
   error: string | null;
 }
 
+export const PROVIDERS = ["openai", "jevjam"] as const;
+
 export const REASONING_EFFORTS = [
   "none",
   "minimal",
@@ -59,6 +65,7 @@ export const MAX_IMAGE_BYTES = 20 << 20; // 20 MiB per image file
 export const BASE64_INFLATION = 4 / 3;
 
 export const DEFAULT_SETTINGS: Settings = {
+  provider: "",
   model: "",
   baseURL: "",
   apiKey: "",
@@ -68,6 +75,7 @@ export const DEFAULT_SETTINGS: Settings = {
   maxTokensEnabled: false,
   maxTokens: "",
   timeout: "",
+  maxScoreLevels: "",
 };
 
 export const DEFAULT_SCHEMA = `{
