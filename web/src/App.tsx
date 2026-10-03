@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { PartsEditor } from "@/components/PartsEditor";
 import { SchemaPanel } from "@/components/SchemaPanel";
+import { SCHEMA_CARD_ID, SchemaIssuesLink } from "@/components/SchemaIssuesLink";
 import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
@@ -249,6 +250,7 @@ export default function App() {
         canRun={canRun}
         running={run.running}
         blocker={blocker}
+        lintIssues={checking ? 0 : (lint?.errors.length ?? 0)}
         onRun={runRequest}
         onStop={() => abortController.current?.abort()}
       />
@@ -316,11 +318,11 @@ export default function App() {
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id={SCHEMA_CARD_ID} tabIndex={-1} className="flex flex-1 flex-col outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Response schema</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-1 flex-col">
               <SchemaPanel
                 schema={draft.schema}
                 onSchemaChange={(schema) => setDraft({ ...draft, schema })}
@@ -369,12 +371,14 @@ function Header({
   canRun,
   running,
   blocker,
+  lintIssues,
   onRun,
   onStop,
 }: {
   canRun: boolean;
   running: boolean;
   blocker: string | null;
+  lintIssues: number;
   onRun: () => void;
   onStop: () => void;
 }) {
@@ -388,6 +392,7 @@ function Header({
           {blocker}
         </span>
       )}
+      {lintIssues > 0 && <SchemaIssuesLink count={lintIssues} />}
       {running ? (
         <Button variant="destructive" onClick={onStop}>
           <Square fill="currentColor" /> Stop
