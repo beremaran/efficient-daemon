@@ -33,6 +33,7 @@ export default function App() {
   const [serverDefaults, setServerDefaults] = useState<Partial<Settings>>({});
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
   const [linting, setLinting] = useState(false);
+  const [lintedBody, setLintedBody] = useState<string | null>(null);
   const [run, setRun] = useState<RunState>(IDLE_STATE);
   const abortController = useRef<AbortController | null>(null);
 
@@ -81,6 +82,7 @@ export default function App() {
     setLinting(true);
     const result = await lintSchema(body);
     setLintResult(result);
+    setLintedBody(body);
     setLinting(false);
   }, []);
 
@@ -93,7 +95,7 @@ export default function App() {
   const requestPreview = request.ok ? request.json : "{}";
 
   // A check is pending from the edit until its result lands, including the debounce wait.
-  const checking = linting || lintInput !== lintJSON;
+  const checking = linting || (lintInput !== null && lintInput !== lintedBody);
   const lintErrors = lintView(lint, checking).errors;
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
