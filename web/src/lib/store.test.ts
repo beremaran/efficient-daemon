@@ -41,6 +41,23 @@ describe("API key storage", () => {
     expect(loadKeepKey()).toBe(true);
   });
 
+  it("Keep for this tab: restores the key when there is no saved draft", () => {
+    sessionStorage.setItem(API_KEY_KEY, "sk-tab");
+    expect(loadDraft().settings.apiKey).toBe("sk-tab");
+  });
+
+  it("Keep for this tab: restores the key when the saved draft does not parse", () => {
+    localStorage.setItem(DRAFT_KEY, "{not json");
+    sessionStorage.setItem(API_KEY_KEY, "sk-tab");
+    expect(loadDraft().settings.apiKey).toBe("sk-tab");
+  });
+
+  it("does not change the shared empty draft", () => {
+    sessionStorage.setItem(API_KEY_KEY, "sk-tab");
+    loadDraft();
+    expect(EMPTY_DRAFT.settings.apiKey).toBe("");
+  });
+
   it("removes a key already in localStorage on load", () => {
     localStorage.setItem(DRAFT_KEY, JSON.stringify(withKey));
     expect(loadDraft().settings.apiKey).toBe("");

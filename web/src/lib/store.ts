@@ -31,11 +31,16 @@ export function loadKeepKey(): boolean {
   return savedApiKey() !== null;
 }
 
+const withApiKey = (draft: Draft, apiKey: string): Draft => ({
+  ...structuredClone(draft),
+  settings: { ...draft.settings, apiKey },
+});
+
 export function loadDraft(): Draft {
   const apiKey = savedApiKey() ?? "";
   try {
     const raw = localStorage.getItem(DRAFT_KEY);
-    if (!raw) return structuredClone(EMPTY_DRAFT);
+    if (!raw) return withApiKey(EMPTY_DRAFT, apiKey);
     const parsed = JSON.parse(raw) as Partial<Draft>;
     if (parsed.settings?.apiKey) {
       localStorage.setItem(DRAFT_KEY, JSON.stringify(withoutApiKey({ ...parsed, settings: parsed.settings })));
@@ -47,7 +52,7 @@ export function loadDraft(): Draft {
       schema: parsed.schema ?? EMPTY_DRAFT.schema,
     };
   } catch {
-    return structuredClone(EMPTY_DRAFT);
+    return withApiKey(EMPTY_DRAFT, apiKey);
   }
 }
 
