@@ -26,8 +26,13 @@ export interface RunState {
 }
 
 // Mounts when a run starts, so the timer starts at 0 each run.
+// The timer is hidden from screen readers, or the status region would read it every second.
 function RunningBadge() {
-  return <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running… {elapsedLabel(useElapsed())}</Badge>;
+  return (
+    <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">
+      Running… <span aria-hidden="true">{elapsedLabel(useElapsed())}</span>
+    </Badge>
+  );
 }
 
 export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Extension }) {

@@ -36,6 +36,13 @@ describe("ResponsePanel run badge", () => {
   });
 });
 
+describe("ResponsePanel running timer", () => {
+  it("hides the ticking time from screen readers", () => {
+    const html = renderToStaticMarkup(<ResponsePanel state={{ ...base, running: true }} runKeys={[]} />);
+    expect(html).toMatch(/Running… <span aria-hidden="true">/);
+  });
+});
+
 describe("ResponsePanel empty state", () => {
   it("shows the getting-started steps before the first run", () => {
     const html = renderToStaticMarkup(<ResponsePanel state={base} runKeys={[]} />);
