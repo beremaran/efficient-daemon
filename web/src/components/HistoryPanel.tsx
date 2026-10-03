@@ -9,20 +9,30 @@ export function HistoryPanel({
   history,
   saveFailed = false,
   onRestore,
+  onUndo,
   onClear,
 }: {
   history: RunRecord[];
   saveFailed?: boolean;
   onRestore: (record: RunRecord) => void;
+  /** Set only while a Restore can be undone. */
+  onUndo?: () => void;
   onClear: () => void;
 }) {
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-2">
       <div className="flex items-center justify-between">
         <span className="text-sm text-muted-foreground">{history.length} run{history.length === 1 ? "" : "s"} (newest first)</span>
-        <Button variant="ghost" size="sm" onClick={onClear} disabled={!history.length}>
-          Clear
-        </Button>
+        <div className="flex items-center gap-1">
+          {onUndo && (
+            <Button variant="outline" size="sm" onClick={onUndo}>
+              Undo restore
+            </Button>
+          )}
+          <Button variant="ghost" size="sm" onClick={onClear} disabled={!history.length}>
+            Clear
+          </Button>
+        </div>
       </div>
       {saveFailed && (
         <Alert variant="destructive">

@@ -15,7 +15,7 @@ import { HistoryPanel } from "@/components/HistoryPanel";
 import { buildAskRequest, lintBody } from "@/lib/ask";
 import { lintSchema, type LintResult } from "@/lib/lint";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
-import type { RunRecord, Settings } from "@/lib/types";
+import type { Draft, RunRecord, Settings } from "@/lib/types";
 
 const IDLE_STATE: RunState = {
   running: false,
@@ -30,6 +30,8 @@ const IDLE_STATE: RunState = {
 export default function App() {
   const [draft, setDraft] = useDraft();
   const { history, saveFailed, push, clear } = useHistory();
+  // The Draft that the last Restore replaced.
+  const [undoDraft, setUndoDraft] = useState<Draft | null>(null);
   const [serverDefaults, setServerDefaults] = useState<Partial<Settings>>({});
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
   const [linting, setLinting] = useState(false);
@@ -183,7 +185,15 @@ export default function App() {
     }
   };
 
-  const restore = (record: RunRecord) => setDraft(record.draft);
+  const restore = (record: RunRecord) => {
+    setUndoDraft(draft);
+    setDraft(record.draft);
+  };
+  const undoRestore = () => {
+    if (!undoDraft) return;
+    setDraft(undoDraft);
+    setUndoDraft(null);
+  };
 
   return (
     <div className="flex h-screen flex-col bg-muted/30">
@@ -279,7 +289,13 @@ export default function App() {
                   <CodegenPanel request={request} parts={draft.parts} schema={draft.schema} />
                 </TabsContent>
                 <TabsContent value="history">
-                  <HistoryPanel history={history} saveFailed={saveFailed} onRestore={restore} onClear={clear} />
+                  <HistoryPanel
+                    history={history}
+                    saveFailed={saveFailed}
+                    onRestore={restore}
+                    onUndo={undoDraft ? undoRestore : undefined}
+                    onClear={clear}
+                  />
                 </TabsContent>
               </CardContent>
             </Card>

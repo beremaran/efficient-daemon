@@ -1,3 +1,4 @@
+import { Children, isValidElement, type ReactElement, type ReactNode } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { HistoryPanel } from "@/components/HistoryPanel";
@@ -31,6 +32,33 @@ describe("HistoryPanel", () => {
     expect(html).toContain("was not saved");
   });
 });
+
+describe("HistoryPanel undo", () => {
+  const render = (onUndo?: () => void) =>
+    HistoryPanel({ history: [record], onRestore: () => {}, onUndo, onClear: () => {} });
+
+  it("hides Undo until a Restore can be undone", () => {
+    expect(renderToStaticMarkup(render())).not.toContain("Undo restore");
+  });
+
+  it("shows Undo and calls onUndo when clicked", () => {
+    const onUndo = vi.fn();
+    expect(renderToStaticMarkup(render(onUndo))).toContain("Undo restore");
+    const button = findByText(render(onUndo), "Undo restore");
+    button?.props.onClick();
+    expect(onUndo).toHaveBeenCalledOnce();
+  });
+});
+
+function findByText(node: ReactNode, text: string): ReactElement<{ onClick: () => void }> | null {
+  if (!isValidElement<{ children?: ReactNode; onClick: () => void }>(node)) return null;
+  if (node.props.children === text) return node;
+  for (const child of Children.toArray(node.props.children)) {
+    const found = findByText(child, text);
+    if (found) return found;
+  }
+  return null;
+}
 
 describe("saveHistory", () => {
   afterEach(() => vi.unstubAllGlobals());
