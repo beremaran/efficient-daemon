@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
-import { connectionMissing, runBlocker, type RunInput } from "@/lib/run";
+import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint, type KeyInfo, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -82,5 +82,41 @@ describe("connectionMissing", () => {
 
   it("does not need a model for jevjam", () => {
     expect(connectionMissing({ model: "", baseURL: "http://llm", jevjam: true })).toBe(false);
+  });
+});
+
+describe("isRunShortcut", () => {
+  const key = (over: Partial<KeyInfo> = {}): KeyInfo => ({
+    key: "Enter",
+    ctrlKey: true,
+    metaKey: false,
+    target: { tagName: "BODY" },
+    ...over,
+  });
+
+  it("runs on Ctrl+Enter or Cmd+Enter when Run is enabled", () => {
+    expect(isRunShortcut(key(), true)).toBe(true);
+    expect(isRunShortcut(key({ ctrlKey: false, metaKey: true }), true)).toBe(true);
+  });
+
+  it("does nothing when Run is disabled", () => {
+    expect(isRunShortcut(key(), false)).toBe(false);
+  });
+
+  it("ignores Enter without a modifier and other keys", () => {
+    expect(isRunShortcut(key({ ctrlKey: false }), true)).toBe(false);
+    expect(isRunShortcut(key({ key: "a" }), true)).toBe(false);
+  });
+
+  it("ignores keys pressed inside an editor", () => {
+    expect(isRunShortcut(key({ target: { tagName: "TEXTAREA" } }), true)).toBe(false);
+    expect(isRunShortcut(key({ target: { tagName: "DIV", isContentEditable: true } }), true)).toBe(false);
+  });
+});
+
+describe("runShortcutHint", () => {
+  it("fits the platform", () => {
+    expect(runShortcutHint(true)).toBe("⌘↵");
+    expect(runShortcutHint(false)).toBe("Ctrl+Enter");
   });
 });

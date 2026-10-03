@@ -32,3 +32,24 @@ export function runBlocker(i: RunInput): string | null {
   if (!lintAllowsRun(i.lint, i.checking)) return "Checking the schema…";
   return null;
 }
+
+export interface KeyInfo {
+  key: string;
+  ctrlKey: boolean;
+  metaKey: boolean;
+  target: EventTarget | { tagName?: string; isContentEditable?: boolean } | null;
+}
+
+// Ctrl/Cmd+Enter outside the editors, while Run is enabled.
+export function isRunShortcut(e: KeyInfo, canRun: boolean) {
+  const target = e.target as { tagName?: string; isContentEditable?: boolean } | null;
+  return (
+    canRun &&
+    e.key === "Enter" &&
+    (e.ctrlKey || e.metaKey) &&
+    !target?.isContentEditable &&
+    !["INPUT", "TEXTAREA", "SELECT"].includes(target?.tagName ?? "")
+  );
+}
+
+export const runShortcutHint = (mac: boolean) => (mac ? "⌘↵" : "Ctrl+Enter");

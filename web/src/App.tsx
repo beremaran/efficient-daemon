@@ -14,7 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
-import { connectionMissing, runBlocker } from "@/lib/run";
+import { connectionMissing, isRunShortcut, runBlocker, runShortcutHint } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -196,6 +196,17 @@ export default function App() {
     }
   };
 
+  // Re-bound each render so the handler sees the latest Draft.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isRunShortcut(e, canRun)) return;
+      e.preventDefault();
+      void runRequest();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
   const restore = (record: RunRecord) => setDraft(record.draft);
 
   return (
@@ -337,6 +348,9 @@ function Header({
       ) : (
         <Button onClick={onRun} disabled={!canRun} aria-describedby={blocker ? "run-blocker" : undefined}>
           <Play /> Run
+          <kbd className="text-xs font-normal opacity-70">
+            {runShortcutHint(/Mac|iPhone|iPad/.test(navigator.platform))}
+          </kbd>
         </Button>
       )}
     </header>
