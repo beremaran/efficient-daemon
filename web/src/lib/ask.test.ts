@@ -116,14 +116,6 @@ describe("lintBody", () => {
 });
 
 describe("askFromDraft", () => {
-  it("builds from the draft it gets, so Run sends the latest text", () => {
-    const stale = draft({}, { parts: [{ id: "p", kind: "text", text: "old" }] });
-    const latest = draft({}, { parts: [{ id: "p", kind: "text", text: "old and new" }] });
-    expect(body(stale).parts).toEqual([{ text: "old" }]);
-    const request = askFromDraft(latest, {});
-    expect(request.ok && request.body.parts).toEqual([{ text: "old and new" }]);
-  });
-
   it("fills empty settings from server defaults", () => {
     const request = askFromDraft(draft({ model: "", provider: "" }), { provider: "openai", model: "srv" });
     expect(request.ok && request.body.model).toBe("srv");

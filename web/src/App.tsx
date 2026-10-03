@@ -34,8 +34,8 @@ const IDLE_STATE: RunState = {
 export default function App() {
   const [draft, setDraft, keepKey, setKeepKey] = useDraft();
   const { history, saveFailed, push, clear } = useHistory();
-  // The Draft that the last Restore replaced.
-  const [undoDraft, setUndoDraft] = useState<Draft | null>(null);
+  // The Draft that the last Restore replaced, and the Draft it put in place.
+  const [undo, setUndo] = useState<{ before: Draft; restored: Draft } | null>(null);
   const [serverDefaults, setServerDefaults] = useState<Partial<Settings>>({});
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
   const [linting, setLinting] = useState(false);
@@ -84,9 +84,13 @@ export default function App() {
       .finally(() => setConfigLoaded(true));
   }, []);
 
+  // Only the newest lint reply counts; an older one landing late must not replace it.
+  const lintSeq = useRef(0);
   const runLint = useCallback(async (body: string) => {
+    const seq = ++lintSeq.current;
     setLinting(true);
     const result = await lintSchema(body);
+    if (seq !== lintSeq.current) return;
     setLintResult(result);
     setLintedBody(body);
     setLinting(false);
@@ -231,17 +235,18 @@ export default function App() {
   });
 
   const restore = (record: RunRecord) => {
-    setUndoDraft(draft);
-    setDraft({
+    const restored = {
       ...record.draft,
       parts: withPartIds(record.draft.parts),
       settings: { ...record.draft.settings, apiKey: draft.settings.apiKey },
-    });
+    };
+    setUndo({ before: draft, restored });
+    setDraft(restored);
   };
   const undoRestore = () => {
-    if (!undoDraft) return;
-    setDraft(undoDraft);
-    setUndoDraft(null);
+    if (!undo) return;
+    setDraft(undo.before);
+    setUndo(null);
   };
 
   return (
@@ -354,7 +359,8 @@ export default function App() {
                     history={history}
                     saveFailed={saveFailed}
                     onRestore={restore}
-                    onUndo={undoDraft ? undoRestore : undefined}
+                    // Any edit after the Restore makes Undo drop that edit, so it goes away.
+                    onUndo={undo && draft === undo.restored ? undoRestore : undefined}
                     onClear={clear}
                   />
                 </TabsContent>
