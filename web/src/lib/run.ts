@@ -49,6 +49,7 @@ export interface KeyInfo {
   key: string;
   ctrlKey: boolean;
   metaKey: boolean;
+  defaultPrevented?: boolean;
   target: EventTarget | { tagName?: string; isContentEditable?: boolean } | null;
 }
 
@@ -57,6 +58,7 @@ export function isRunShortcut(e: KeyInfo, canRun: boolean) {
   const target = e.target as { tagName?: string; isContentEditable?: boolean } | null;
   return (
     canRun &&
+    !e.defaultPrevented &&
     e.key === "Enter" &&
     (e.ctrlKey || e.metaKey) &&
     !target?.isContentEditable &&

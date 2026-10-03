@@ -143,6 +143,10 @@ describe("isRunShortcut", () => {
     expect(isRunShortcut(key({ key: "a" }), true)).toBe(false);
   });
 
+  it("ignores a key an editor already handled", () => {
+    expect(isRunShortcut(key({ defaultPrevented: true }), true)).toBe(false);
+  });
+
   it("ignores keys pressed inside an editor", () => {
     expect(isRunShortcut(key({ target: { tagName: "TEXTAREA" } }), true)).toBe(false);
     expect(isRunShortcut(key({ target: { tagName: "DIV", isContentEditable: true } }), true)).toBe(false);
