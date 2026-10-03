@@ -17,6 +17,10 @@ export interface RunInput {
 
 const hasContent = (p: Part) => !!(p.kind === "text" ? (p.text ?? "") : (p.image ?? p.pdf ?? "")).trim();
 
+// Model (unless jevjam) or base URL is missing.
+export const connectionMissing = (i: Pick<RunInput, "model" | "baseURL" | "jevjam">) =>
+  (!i.model && !i.jevjam) || !i.baseURL;
+
 export function runBlocker(i: RunInput): string | null {
   if (!i.model && !i.jevjam) return "Add a model in Connection & sampling";
   if (!i.baseURL) return "Add a base URL in Connection & sampling";

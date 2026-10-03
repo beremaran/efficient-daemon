@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 import type { AskRequest } from "@/lib/ask";
 import type { LintResult } from "@/lib/lint";
-import { runBlocker, type RunInput } from "@/lib/run";
+import { connectionMissing, runBlocker, type RunInput } from "@/lib/run";
 
 const okRequest: AskRequest = { ok: true, body: {}, json: "{}", bytes: 2 };
 const okLint: LintResult = { valid: true, errors: [], warnings: [] };
@@ -67,5 +67,20 @@ describe("runBlocker", () => {
 
   it("gives the first reason when several apply", () => {
     expect(runBlocker(input({ model: "", baseURL: "", parts: [] }))).toBe("Add a model in Connection & sampling");
+  });
+});
+
+describe("connectionMissing", () => {
+  it("is true when the model or base URL is missing", () => {
+    expect(connectionMissing({ model: "", baseURL: "http://llm", jevjam: false })).toBe(true);
+    expect(connectionMissing({ model: "gpt", baseURL: "", jevjam: false })).toBe(true);
+  });
+
+  it("is false when both are set", () => {
+    expect(connectionMissing({ model: "gpt", baseURL: "http://llm", jevjam: false })).toBe(false);
+  });
+
+  it("does not need a model for jevjam", () => {
+    expect(connectionMissing({ model: "", baseURL: "http://llm", jevjam: true })).toBe(false);
   });
 });

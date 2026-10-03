@@ -14,7 +14,7 @@ import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings } from "@/lib/ask";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
-import { runBlocker } from "@/lib/run";
+import { connectionMissing, runBlocker } from "@/lib/run";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
 import type { RunRecord, Settings } from "@/lib/types";
 
@@ -36,6 +36,8 @@ export default function App() {
   const [linting, setLinting] = useState(false);
   const [lintedBody, setLintedBody] = useState<string | null>(null);
   const [run, setRun] = useState<RunState>(IDLE_STATE);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [connectionOpen, setConnectionOpen] = useState(false);
   const abortController = useRef<AbortController | null>(null);
 
   const effectiveSettings = useMemo(
@@ -71,7 +73,8 @@ export default function App() {
           maxScoreLevels: String(cfg["max-score-levels"] ?? ""),
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setConfigLoaded(true));
   }, []);
 
   const runLint = useCallback(async (body: string) => {
@@ -105,6 +108,13 @@ export default function App() {
     lintErrors: lintErrors.length,
   });
   const canRun = !run.running && blocker === null;
+
+  // Once the server defaults are known, open the Connection card if it needs input.
+  const connectionNeedsInput = connectionMissing({ model, baseURL, jevjam });
+  useEffect(() => {
+    if (configLoaded) setConnectionOpen(connectionNeedsInput);
+    // Only the first load decides; later edits must not move the card.
+  }, [configLoaded]);
 
   const runRequest = async () => {
     const latest = askFromDraft(draft, serverDefaults);
@@ -199,7 +209,11 @@ export default function App() {
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row lg:overflow-hidden">
         <section className="flex w-full shrink-0 flex-col gap-4 lg:w-[460px] lg:overflow-auto lg:pr-1">
           <Card>
-            <details className="group">
+            <details
+              className="group"
+              open={connectionOpen}
+              onToggle={(e) => setConnectionOpen(e.currentTarget.open)}
+            >
               <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                 <CardHeader className="flex-row items-center justify-between pb-4">
                   <CardTitle className="text-sm">Connection & sampling</CardTitle>
