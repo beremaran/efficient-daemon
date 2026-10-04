@@ -1,6 +1,8 @@
 // Domain types mirroring the server's POST /ask body, plus shared UI types.
 
 export interface Part {
+  /** Stable across add, move and remove; the Ask request drops it. */
+  id: string;
   kind: "text" | "image" | "pdf";
   text?: string;
   /** base64 (no data: prefix) when source=upload, else an http(s) URL. */
@@ -10,6 +12,8 @@ export interface Part {
   source?: "upload" | "url";
   /** Original filename for upload parts, display only. */
   fileName?: string;
+  /** The image value of the other source, kept while the Part shows this one. */
+  parked?: { image?: string; fileName?: string };
 }
 
 export interface Settings {
@@ -40,7 +44,8 @@ export interface RunRecord {
   status: number | null;
   latencyMs: number | null;
   model: string;
-  request: unknown;
+  /** The Draft snapshot for this run; parts keep UI metadata and settings capture resolved defaults. */
+  draft: Draft;
   response: unknown;
   responseText: string;
   error: string | null;
@@ -61,8 +66,6 @@ export const REASONING_EFFORTS = [
 // Keep in sync with internal/server (maxBodyBytes) and internal/message.
 export const MAX_BODY_BYTES = 30 << 20; // 30 MiB request body cap
 export const MAX_IMAGE_BYTES = 20 << 20; // 20 MiB per image file
-// Base64 encodes 3 bytes into 4 chars.
-export const BASE64_INFLATION = 4 / 3;
 
 export const DEFAULT_SETTINGS: Settings = {
   provider: "",
@@ -90,6 +93,6 @@ export const DEFAULT_SCHEMA = `{
 export const EMPTY_DRAFT: Draft = {
   settings: { ...DEFAULT_SETTINGS },
   system: "",
-  parts: [{ kind: "text", text: "" }],
+  parts: [{ id: "initial-part", kind: "text", text: "" }],
   schema: DEFAULT_SCHEMA,
 };

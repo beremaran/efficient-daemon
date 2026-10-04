@@ -1,13 +1,15 @@
 import { useMemo, useState } from "react";
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { EditorHint } from "@/components/editor";
+import { editorProps } from "@/lib/editor";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { LintStatus } from "@/components/LintStatus";
 import { Textarea } from "@/components/ui/textarea";
-import type { LintResult } from "@/lib/lint";
+import { lintView, type LintResult } from "@/lib/lint";
 
 // json_typegen_wasm: the same engine transform.tools uses for
 // JSON → JSON Schema, so output matches that site.
@@ -31,16 +33,19 @@ export function SchemaPanel({
   onSchemaChange,
   lint,
   linting,
+  runKeys,
 }: {
   schema: string;
   onSchemaChange: (next: string) => void;
   lint: LintResult | null;
   linting: boolean;
+  runKeys: Extension;
 }) {
   const [mode, setMode] = useState<"edit" | "generate">("edit");
   const [sample, setSample] = useState("");
   const [generateError, setGenerateError] = useState<string | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
+  const { stale } = lintView(lint, linting);
 
   const canGenerate = useMemo(() => {
     if (!sample.trim()) return false;
@@ -70,47 +75,35 @@ export function SchemaPanel({
   };
 
   return (
-    <Tabs value={mode} onValueChange={(v) => setMode(v as "edit" | "generate")} className="flex flex-col">
+    <Tabs value={mode} onValueChange={(v) => setMode(v as "edit" | "generate")} className="flex flex-1 flex-col">
       <div className="flex items-center justify-between gap-2">
-        <TabsList>
+        <TabsList variant="line">
           <TabsTrigger value="edit">Edit</TabsTrigger>
           <TabsTrigger value="generate">Generate from JSON</TabsTrigger>
         </TabsList>
-        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-          {linting && <span>linting…</span>}
-          {lint && !linting && lint.valid && lint.warnings.length === 0 && (
-            <Badge className="border-emerald-600/30 bg-emerald-50 text-emerald-700">schema OK</Badge>
-          )}
-          {lint && !linting && (!lint.valid || lint.warnings.length > 0) && (
-            <span>
-              {!lint.valid && <Badge className="mr-1 border-destructive/30 bg-destructive/10 text-destructive">invalid</Badge>}
-              {lint.warnings.length > 0 && (
-                <Badge className="border-warning/40 bg-warning/10 text-warning-foreground">
-                  {lint.warnings.length} warning{lint.warnings.length > 1 ? "s" : ""}
-                </Badge>
-              )}
-            </span>
-          )}
-        </div>
+        <LintStatus lint={lint} linting={linting} />
       </div>
 
-      <TabsContent value="edit" className="mt-2 min-h-0">
-        <div className="h-full min-h-[300px] overflow-hidden rounded-md border">
+      <TabsContent value="edit" className="mt-2 flex min-h-[300px] flex-col">
+        <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
           <CodeMirror
             value={schema}
-            height="300px"
-            extensions={[json()]}
+            className="h-full"
+            height="100%"
+            minHeight="300px"
+            extensions={[json(), runKeys]}
             theme={oneDark}
             basicSetup={{ foldGutter: true }}
+            {...editorProps(false)}
             onChange={(value) => onSchemaChange(value)}
           />
         </div>
+        <EditorHint />
       </TabsContent>
 
       <TabsContent value="generate" className="mt-2 flex flex-col gap-2 min-h-0">
         <div className="text-xs text-muted-foreground">
-          Paste your ideal JSON; a schema describing it is generated locally (same engine as
-          transform.tools). Then "Use this schema" to put it in the editor.
+          Paste your ideal JSON; a schema describing it is generated locally. Then "Use this schema" to put it in the editor.
         </div>
         <Textarea
           value={sample}
@@ -143,16 +136,16 @@ export function SchemaPanel({
             <CodeMirror
               value={preview}
               height="160px"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
-              editable={false}
+              {...editorProps(true)}
             />
           </div>
         )}
       </TabsContent>
 
-      {lint && !linting && (lint.errors.length > 0 || lint.warnings.length > 0) && (
-        <div className="mt-2 flex flex-col gap-2">
+      {lint && (lint.errors.length > 0 || lint.warnings.length > 0) && (
+        <div aria-busy={stale} className="mt-2 flex flex-col gap-2">
           {lint.errors.map((e, i) => (
             <Alert key={`e${i}`} variant="destructive">
               <AlertTitle>Schema error</AlertTitle>

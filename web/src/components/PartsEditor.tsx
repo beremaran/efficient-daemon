@@ -1,69 +1,144 @@
-import { useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ArrowDown, ArrowUp, FileText, Image as ImageIcon, Plus, Trash2, Type } from "lucide-react";
 
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { IconButton } from "@/components/ui/icon-button";
 import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
-import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
-import { checkImageFile, estimateBodyBytes, fileToBase64, MAX_BODY_MB } from "@/lib/media";
-import { MAX_BODY_BYTES, type Part } from "@/lib/types";
+import { filesToPick } from "@/lib/history";
+import { MAX_BODY_MB, dragHasFiles, pastedImage, readDroppedFile, readPartFile } from "@/lib/media";
+import { focusAfterRemove, hasFile, movePart, newPart, removePart, restorePart, switchImageSource } from "@/lib/parts";
+import { EMPTY_DRAFT, MAX_BODY_BYTES, type Part } from "@/lib/types";
 import { cn } from "@/lib/utils";
 
+/** How long Undo stays after removing a Part with a file. */
+const UNDO_MS = 8000;
+
 export function PartsEditor({
-  system,
   parts,
   onPartsChange,
-  schemaText,
+  bytes,
 }: {
-  system: string;
   parts: Part[];
   onPartsChange: (next: Part[]) => void;
-  schemaText: string;
+  /** Size of the Ask request; null while it can't be built. */
+  bytes: number | null;
 }) {
-  const setPart = (index: number, patch: Partial<Part>) => {
-    const next = [...parts];
-    next[index] = { ...next[index], ...patch };
-    onPartsChange(next);
+  // File errors by Part id; UI-only, so they stay out of the Draft.
+  const [fileErrors, setFileErrors] = useState<Record<string, string>>({});
+  const setFileError = (id: string, message?: string) =>
+    setFileErrors(({ [id]: _old, ...rest }) => (message ? { ...rest, [id]: message } : rest));
+
+  // The Part just added; it takes focus until the next change.
+  const [focusId, setFocusId] = useState<string>();
+  // File reads finish late, so edits that land after one read the latest props from a ref.
+  const latest = useRef({ parts, onPartsChange });
+  useEffect(() => {
+    latest.current = { parts, onPartsChange };
+  });
+  // The list this editor last sent up; any other list came from outside, e.g. a History restore.
+  const sent = useRef(parts);
+  const emit = (next: Part[]) => {
+    sent.current = next;
+    latest.current.onPartsChange(next);
+  };
+  const change = (next: Part[]) => {
+    setFocusId(undefined);
+    emit(next);
+  };
+
+  // Where focus goes after a remove or Undo: a Part id, or the add buttons when `id` is unset.
+  const rootRef = useRef<HTMLDivElement>(null);
+  const afterRemove = useRef<{ id?: string }>(undefined);
+  useEffect(() => {
+    if (!afterRemove.current) return;
+    const { id } = afterRemove.current;
+    afterRemove.current = undefined;
+    const target = id
+      ? rootRef.current?.querySelector(`[data-part-id="${id}"] [data-remove]`)
+      : rootRef.current?.querySelector("[data-add-parts] button");
+    (target as HTMLElement | null)?.focus();
+  }, [parts]);
+
+  // The last removed Part that held a file; Undo offers it back for a few seconds.
+  const [removed, setRemoved] = useState<{ part: Part; index: number }>();
+  const undoTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const dropUndo = () => {
+    clearTimeout(undoTimer.current);
+    setRemoved(undefined);
+  };
+  useEffect(() => () => clearTimeout(undoTimer.current), []);
+  useEffect(() => {
+    if (parts !== sent.current) {
+      clearTimeout(undoTimer.current);
+      setRemoved(undefined);
+    }
+  }, [parts]);
+
+  // By id, so a Part removed or moved since the edit began is not mistaken for another.
+  const setPart = (id: string, patch: Partial<Part>) => {
+    const { parts } = latest.current;
+    if (parts.some((p) => p.id === id)) change(parts.map((p) => (p.id === id ? { ...p, ...patch } : p)));
   };
 
   const addPart = (kind: Part["kind"]) => {
-    if (kind === "text") onPartsChange([...parts, { kind: "text", text: "" }]);
-    else if (kind === "image") onPartsChange([...parts, { kind: "image", source: "url", image: "" }]);
-    else onPartsChange([...parts, { kind: "pdf", pdf: "" }]);
+    const part = newPart(kind);
+    emit([...parts, part]);
+    setFocusId(part.id);
   };
 
-  const removePart = (index: number) => onPartsChange(parts.filter((_, i) => i !== index));
-
-  const move = (index: number, delta: -1 | 1) => {
-    const target = index + delta;
-    if (target < 0 || target >= parts.length) return;
-    const next = [...parts];
-    [next[index], next[target]] = [next[target], next[index]];
-    onPartsChange(next);
-  };
-
-  const totalBytes = estimateBodyBytes(parts, system, schemaText);
+  const toPick = filesToPick({ ...EMPTY_DRAFT, parts });
 
   return (
-    <div className="flex flex-col gap-2">
+    <div ref={rootRef} className="flex flex-col gap-2">
+      {toPick.length > 0 && (
+        <Alert>
+          <AlertTitle>Pick these files again</AlertTitle>
+          <AlertDescription>History keeps file names, not file data: {toPick.join(", ")}</AlertDescription>
+        </Alert>
+      )}
       {parts.map((part, i) => (
         <PartEditor
-          key={i}
+          key={part.id}
           index={i}
           part={part}
           count={parts.length}
-          onChange={(patch) => setPart(i, patch)}
-          onRemove={() => removePart(i)}
-          onMove={(delta) => move(i, delta)}
+          error={fileErrors[part.id]}
+          autoFocus={part.id === focusId}
+          onError={(message) => setFileError(part.id, message)}
+          onChange={(patch) => setPart(part.id, patch)}
+          onRemove={() => {
+            setFileError(part.id);
+            change(removePart(parts, i));
+            dropUndo();
+            if (hasFile(part)) {
+              setRemoved({ part, index: i });
+              undoTimer.current = setTimeout(() => setRemoved(undefined), UNDO_MS);
+            }
+            afterRemove.current = { id: focusAfterRemove(parts, i) };
+          }}
+          onMove={(delta) => change(movePart(parts, i, delta))}
         />
       ))}
 
-      <PayloadMeter totalBytes={totalBytes} />
+      {removed && (
+        <UndoNotice
+          label={`Removed ${removed.part.fileName ?? "file"}`}
+          onUndo={() => {
+            change(restorePart(parts, removed.part, removed.index));
+            afterRemove.current = { id: removed.part.id };
+            dropUndo();
+          }}
+        />
+      )}
 
-      <div className="flex items-center gap-2">
+      {bytes !== null && <SizeMeter totalBytes={bytes} />}
+
+      <div data-add-parts className="flex items-center gap-2">
         <Button type="button" variant="outline" size="sm" onClick={() => addPart("text")}>
           <Type /> Text
         </Button>
@@ -78,7 +153,18 @@ export function PartsEditor({
   );
 }
 
-function PayloadMeter({ totalBytes }: { totalBytes: number }) {
+export function UndoNotice({ label, onUndo }: { label: string; onUndo: () => void }) {
+  return (
+    <div role="status" className="flex items-center justify-between gap-2 rounded-md border px-3 py-2 text-sm">
+      <span className="truncate">{label}</span>
+      <Button type="button" variant="outline" size="sm" onClick={onUndo}>
+        Undo
+      </Button>
+    </div>
+  );
+}
+
+function SizeMeter({ totalBytes }: { totalBytes: number }) {
   // Keep in sync with internal/server maxBodyBytes (30 MiB).
   const pct = Math.min(100, (totalBytes / MAX_BODY_BYTES) * 100);
   const over = totalBytes > MAX_BODY_BYTES;
@@ -91,17 +177,20 @@ function PayloadMeter({ totalBytes }: { totalBytes: number }) {
         />
       </div>
       <div className={cn("text-xs", over ? "text-destructive" : "text-muted-foreground")}>
-        payload ≈ {(totalBytes / (1 << 20)).toFixed(1)} MB / {MAX_BODY_MB} MB body cap
+        Ask request ≈ {(totalBytes / (1 << 20)).toFixed(1)} MB / {MAX_BODY_MB} MB cap
         {over ? " — over the cap; shrink or remove media" : ""}
       </div>
     </div>
   );
 }
 
-function PartEditor({
+export function PartEditor({
   index,
   part,
   count,
+  error,
+  autoFocus,
+  onError,
   onChange,
   onRemove,
   onMove,
@@ -109,12 +198,66 @@ function PartEditor({
   index: number;
   part: Part;
   count: number;
+  /** File error to show under this Part. */
+  error?: string;
+  /** Focus the first field on mount. */
+  autoFocus?: boolean;
+  onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
   onRemove: () => void;
   onMove: (delta: -1 | 1) => void;
 }) {
+  // A file dropped on an image or PDF Part, or an image pasted into an image Part, loads into it.
+  const [over, setOver] = useState(false);
+  const kind = part.kind === "image" || part.kind === "pdf" ? part.kind : undefined;
+  const current = useRef(part);
+  useEffect(() => {
+    current.current = part;
+  });
+  // A file read can end after the user left the Upload tab; the file then goes to Upload, not over the URL.
+  const place = (kind: "image" | "pdf", base64: string, name: string) => {
+    const loaded = kind === "image" ? { image: base64, fileName: name } : { pdf: base64, fileName: name };
+    const { current: now } = current;
+    onChange(kind === "image" && now.source === "url" ? { ...switchImageSource(now, "upload"), ...loaded } : loaded);
+  };
+  // Only the newest read of this Part, picked, dropped or pasted, may apply its result.
+  const readSeq = useRef(0);
+  const load = async (kind: "image" | "pdf", file: File, picked = false) => {
+    const seq = ++readSeq.current;
+    const result = await (picked ? readPartFile(file, kind === "image") : readDroppedFile(kind, file));
+    if (seq !== readSeq.current) return;
+    if ("message" in result) return onError(result.message);
+    onError();
+    place(kind, result.base64, file.name);
+  };
+  const accepts = (e: React.DragEvent) => kind !== undefined && dragHasFiles(e.dataTransfer);
   return (
-    <Card>
+    <Card
+      data-part-id={part.id}
+      data-drop-over={over || undefined}
+      className={cn(over && "ring-2 ring-primary")}
+      onDragOver={(e) => {
+        if (!accepts(e)) return;
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={(e) => {
+        if (!e.currentTarget.contains(e.relatedTarget as Node | null)) setOver(false);
+      }}
+      onDrop={(e) => {
+        setOver(false);
+        const file = e.dataTransfer.files[0];
+        if (!kind || !file) return;
+        e.preventDefault();
+        void load(kind, file);
+      }}
+      onPaste={(e) => {
+        const file = kind === "image" ? pastedImage(e.clipboardData) : undefined;
+        if (!file) return;
+        e.preventDefault();
+        void load("image", file);
+      }}
+    >
       <CardHeader className="flex flex-row items-center justify-between gap-2 py-3">
         <CardTitle className="flex items-center gap-2 text-sm">
           <Badge variant="outline">#{index + 1}</Badge>
@@ -124,15 +267,15 @@ function PartEditor({
           <span className="capitalize">{part.kind === "pdf" ? "PDF" : part.kind}</span>
         </CardTitle>
         <div className="flex items-center gap-1">
-          <Button variant="ghost" size="icon" onClick={() => onMove(-1)} disabled={index === 0} aria-label="move up">
+          <IconButton onClick={() => onMove(-1)} disabled={index === 0} label={`Move part ${index + 1} up`}>
             <ArrowUp />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={() => onMove(1)} disabled={index === count - 1} aria-label="move down">
+          </IconButton>
+          <IconButton onClick={() => onMove(1)} disabled={index === count - 1} label={`Move part ${index + 1} down`}>
             <ArrowDown />
-          </Button>
-          <Button variant="ghost" size="icon" onClick={onRemove} aria-label="remove part">
+          </IconButton>
+          <IconButton onClick={onRemove} data-remove label={`Remove part ${index + 1}`}>
             <Trash2 />
-          </Button>
+          </IconButton>
         </div>
       </CardHeader>
       <CardContent>
@@ -142,10 +285,11 @@ function PartEditor({
             onChange={(e) => onChange({ text: e.target.value })}
             placeholder="Text content…"
             className="min-h-[160px]"
+            autoFocus={autoFocus}
           />
         )}
-        {part.kind === "image" && <ImagePartEditor part={part} onChange={onChange} />}
-        {part.kind === "pdf" && <PdfPartEditor part={part} onChange={onChange} />}
+        {part.kind === "image" && <ImagePartEditor part={part} error={error} autoFocus={autoFocus} onError={onError} onChange={onChange} onPick={(file) => void load("image", file, true)} />}
+        {part.kind === "pdf" && <PdfPartEditor part={part} error={error} autoFocus={autoFocus} onPick={(file) => void load("pdf", file, true)} />}
       </CardContent>
     </Card>
   );
@@ -153,69 +297,85 @@ function PartEditor({
 
 function ImagePartEditor({
   part,
+  error,
+  autoFocus,
+  onError,
   onChange,
+  onPick,
 }: {
   part: Part;
+  error?: string;
+  autoFocus?: boolean;
+  onError: (message?: string) => void;
   onChange: (patch: Partial<Part>) => void;
+  onPick: (file: File) => void;
 }) {
-  const urlMode = part.source === "url";
+  const source = part.source === "url" ? "url" : "upload";
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-3">
-        <Label className="text-xs text-muted-foreground">Upload</Label>
-        <Switch
-          checked={urlMode}
-          onCheckedChange={(v) => onChange({ source: v ? "url" : "upload", image: "", fileName: undefined })}
-          aria-label="toggle image URL mode"
-        />
-        <Label className="text-xs text-muted-foreground">http(s) URL</Label>
-      </div>
-      {urlMode ? (
+    <Tabs
+      value={source}
+      onValueChange={(v) => {
+        onError();
+        onChange(switchImageSource(part, v as "upload" | "url"));
+      }}
+      className="flex flex-col gap-2"
+    >
+      <TabsList className="self-start" aria-label="Image source">
+        <TabsTrigger value="upload">Upload</TabsTrigger>
+        <TabsTrigger value="url">URL</TabsTrigger>
+      </TabsList>
+      <TabsContent value="url">
         <Input
           value={part.image ?? ""}
           onChange={(e) => onChange({ image: e.target.value })}
           placeholder="https://example.com/picture.png"
           spellCheck={false}
+          autoFocus={autoFocus}
         />
-      ) : (
-        <FileInput
-          accept="image/*"
-          enforceImageCap
-          fileName={part.fileName}
-          onFile={(b64, name) => onChange({ image: b64, fileName: name })}
-        />
-      )}
-      {part.image && !urlMode && (
-        <img
-          src={`data:;base64,${part.image}`}
-          alt="uploaded preview"
-          className="max-h-32 w-auto rounded border"
-        />
-      )}
-    </div>
+      </TabsContent>
+      <TabsContent value="upload" className="flex flex-col gap-2">
+        <FileInput accept="image/*" fileName={part.fileName} autoFocus={autoFocus} onPick={onPick} />
+        {part.image && (
+          <img
+            src={`data:;base64,${part.image}`}
+            alt="uploaded preview"
+            className="max-h-32 w-auto rounded border"
+          />
+        )}
+      </TabsContent>
+      {/* Outside the tabs: a dropped or pasted file can fail while the URL tab is open. */}
+      <FileError error={error} />
+    </Tabs>
   );
 }
 
-function PdfPartEditor({ part, onChange }: { part: Part; onChange: (patch: Partial<Part>) => void }) {
-  return (
-    <FileInput
-      accept="application/pdf,.pdf"
-      fileName={part.fileName}
-      onFile={(pdf, name) => onChange({ pdf, fileName: name })}
-    />
-  );
+function PdfPartEditor({
+  part,
+  error,
+  autoFocus,
+  onPick,
+}: {
+  part: Part;
+  error?: string;
+  autoFocus?: boolean;
+  onPick: (file: File) => void;
+}) {
+  return <FileInput accept="application/pdf,.pdf" fileName={part.fileName} error={error} autoFocus={autoFocus} onPick={onPick} />;
 }
 
 function FileInput({
   accept,
   fileName,
-  enforceImageCap,
-  onFile,
+  error,
+  autoFocus,
+  onPick,
 }: {
   accept: string;
-  enforceImageCap?: boolean;
   fileName?: string;
-  onFile: (base64: string, name: string) => void;
+  error?: string;
+  autoFocus?: boolean;
+  /** Gets the picked file; the Part reads it, in order with drops and pastes. */
+  onPick: (file: File) => void;
 }) {
   const inputRef = useRef<HTMLInputElement>(null);
   return (
@@ -225,26 +385,29 @@ function FileInput({
         type="file"
         accept={accept}
         className="hidden"
-        onChange={async (e) => {
+        onChange={(e) => {
           const file = e.target.files?.[0];
-          if (!file) return;
-          const guard = enforceImageCap ? checkImageFile(file) : { ok: true };
-          if (!guard.ok) {
-            alert(guard.message);
-            e.target.value = "";
-            return;
-          }
-          const b64 = await fileToBase64(file);
-          onFile(b64, file.name);
           e.target.value = "";
+          if (file) onPick(file);
         }}
       />
       <div className="flex items-center gap-2">
-        <Button type="button" variant="outline" size="sm" onClick={() => inputRef.current?.click()}>
+        <Button type="button" variant="outline" size="sm" autoFocus={autoFocus} onClick={() => inputRef.current?.click()}>
           <Plus /> Choose file
         </Button>
         {fileName && <span className="truncate text-xs text-muted-foreground">{fileName}</span>}
       </div>
+      <FileError error={error} />
     </div>
+  );
+}
+
+function FileError({ error }: { error?: string }) {
+  return (
+    error && (
+      <p role="alert" className="text-xs text-destructive">
+        {error}
+      </p>
+    )
   );
 }

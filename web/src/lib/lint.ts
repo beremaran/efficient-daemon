@@ -1,38 +1,20 @@
 // POST /schema/lint client.
 
+import { errorMessage } from "@/lib/utils";
+
 export interface LintResult {
   valid: boolean;
   errors: string[];
   warnings: string[];
 }
 
-export async function lintSchema(
-  schema: string,
-  provider: string,
-  maxScoreLevels: string,
-): Promise<LintResult> {
-  if (!schema.trim()) return { valid: false, errors: ["schema is required"], warnings: [] };
-  // The server takes the schema as a JSON object (same as POST /ask), so parse
-  // the editor text here; sending it raw would double-encode it into a string.
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(schema);
-  } catch (err) {
-    return {
-      valid: false,
-      errors: [`schema is not valid JSON: ${err instanceof Error ? err.message : String(err)}`],
-      warnings: [],
-    };
-  }
+/** Lints a JSON lint body (see lintBody in @/lib/ask). */
+export async function lintSchema(body: string): Promise<LintResult> {
   try {
     const res = await fetch("/schema/lint", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        schema: parsed,
-        ...(provider && { provider }),
-        ...(maxScoreLevels.trim() && { "max-score-levels": Number(maxScoreLevels) }),
-      }),
+      body,
     });
     if (!res.ok) {
       // The endpoint itself failed; treat as a lint error so Run stays blocked.
@@ -43,8 +25,18 @@ export async function lintSchema(
   } catch (err) {
     return {
       valid: false,
-      errors: [`lint failed: ${err instanceof Error ? err.message : String(err)}`],
+      errors: [`lint failed: ${errorMessage(err)}`],
       warnings: [],
     };
   }
+}
+
+/** The result to show while a check runs: the last one, marked out of date. */
+export function lintView(lint: LintResult | null, linting: boolean) {
+  return { errors: lint?.errors ?? [], warnings: lint?.warnings ?? [], stale: !!lint && linting };
+}
+
+/** Run needs a finished check that passed; no result yet, or a check in progress, blocks it. */
+export function lintAllowsRun(lint: LintResult | null, checking: boolean): boolean {
+  return !!lint && !checking && lint.errors.length === 0;
 }

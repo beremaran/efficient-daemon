@@ -1,16 +1,22 @@
-import CodeMirror from "@uiw/react-codemirror";
+import CodeMirror, { type Extension } from "@uiw/react-codemirror";
 import { json } from "@codemirror/lang-json";
 import { oneDark } from "@codemirror/theme-one-dark";
+import { editorProps } from "@/lib/editor";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { CopyButton } from "@/components/CopyButton";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { useState } from "react";
-import { copyText } from "@/lib/store";
+import { prettyJson } from "@/lib/ask";
+import { downloadText } from "@/lib/download";
+import { useMemo, useState } from "react";
+import { elapsedLabel, stoppedLabel, useElapsed } from "@/lib/run";
 
 export interface RunState {
   running: boolean;
+  /** When the run began (ms since epoch); the response tab can remount mid-run. */
+  startedAt?: number;
   cancelled?: boolean;
   status: number | null;
   latencyMs: number | null;
@@ -21,66 +27,95 @@ export interface RunState {
   requestPreview: string;
 }
 
-export function ResponsePanel({ state }: { state: RunState }) {
-  const { running, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
+// The timer counts from the run's own start time, so remounting does not reset it.
+// The timer is hidden from screen readers, or the status region would read it every second.
+function RunningBadge({ startedAt }: { startedAt?: number }) {
+  return (
+    <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">
+      Running… <span aria-hidden="true">{elapsedLabel(useElapsed(startedAt))}</span>
+    </Badge>
+  );
+}
+
+export function ResponsePanel({ state, runKeys }: { state: RunState; runKeys: Extension }) {
+  const { running, startedAt, cancelled, status, latencyMs, responseText, answers, error, requestPreview } = state;
   const [tab, setTab] = useState("response");
+  const shown = useMemo(() => (running ? responseText : prettyJson(responseText)), [responseText, running]);
+  const noRunYet = !running && !cancelled && status === null && !responseText && !error;
   return (
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="flex items-center gap-2 text-sm">
-        {running ? (
-          <Badge className="border-blue-500/30 bg-blue-50 text-blue-700">Running…</Badge>
-        ) : cancelled ? (
-          <Badge variant="outline">Stopped</Badge>
-        ) : status !== null ? (
-          <>
-            <Badge
-              className={
-                status >= 200 && status < 300
-                  ? "border-emerald-600/30 bg-emerald-50 text-emerald-700"
-                  : "border-destructive/30 bg-destructive/10 text-destructive"
-              }
-            >
-              HTTP {status}
-            </Badge>
-            {latencyMs !== null && <span className="text-xs text-muted-foreground">{latencyMs} ms</span>}
-          </>
-        ) : (
-          <span className="text-muted-foreground">No run yet.</span>
-        )}
+        {/* Stays mounted so screen readers announce the badge text. */}
+        <div role="status" className="flex items-center gap-2">
+          {running ? (
+            <RunningBadge startedAt={startedAt} />
+          ) : cancelled ? (
+            <Badge variant="outline">{stoppedLabel(latencyMs ?? 0)}</Badge>
+          ) : status !== null ? (
+            <>
+              <Badge
+                className={
+                  status >= 200 && status < 300
+                    ? "border-emerald-600/30 bg-emerald-50 text-emerald-700"
+                    : "border-destructive/30 bg-destructive/10 text-destructive"
+                }
+              >
+                HTTP {status}
+              </Badge>
+              {latencyMs !== null && <span className="text-xs text-muted-foreground">{latencyMs} ms</span>}
+            </>
+          ) : (
+            <span className="text-muted-foreground">No run yet.</span>
+          )}
+        </div>
         <span className="flex-1" />
         {responseText && (
-          <Button variant="ghost" size="sm" onClick={() => copyText(responseText)}>
+          <CopyButton text={shown} variant="ghost" size="sm">
             Copy response
-          </Button>
+          </CopyButton>
         )}
+        <Button variant="ghost" size="sm" disabled={!responseText} onClick={() => downloadText(shown, "response.json")}>
+          Download
+        </Button>
       </div>
 
-      {error && (
-        <Alert variant="destructive">
-          <AlertTitle>Request failed</AlertTitle>
-          <AlertDescription className="break-words font-mono text-xs">{error}</AlertDescription>
-        </Alert>
-      )}
+      {/* Stays mounted so screen readers announce text changes. */}
+      <div role="alert" className="empty:-mb-3">
+        {error && (
+          <Alert variant="destructive">
+            <AlertTitle>Request failed</AlertTitle>
+            <AlertDescription className="break-words font-mono text-xs">{error}</AlertDescription>
+          </Alert>
+        )}
+      </div>
 
       <Separator />
 
       <Tabs value={tab === "answers" && !answers ? "response" : tab} onValueChange={setTab} className="flex min-h-0 flex-1 flex-col gap-3">
-        <TabsList className="self-end">
+        <TabsList variant="line" className="self-end">
           <TabsTrigger value="response">Response</TabsTrigger>
           {answers && <TabsTrigger value="answers">Answers</TabsTrigger>}
-          <TabsTrigger value="request">Request body</TabsTrigger>
+          <TabsTrigger value="request">Ask request</TabsTrigger>
         </TabsList>
         <TabsContent value="response" className="mt-0 flex min-h-0 flex-1 flex-col">
-          <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
-            <CodeMirror
-              value={responseText || "// run a request to see the response"}
-              height="100%"
-              extensions={[json()]}
-              theme={oneDark}
-              editable={false}
-              className="h-full min-h-0"
-            />
-          </div>
+          {noRunYet ? (
+            <ol className="list-inside list-decimal rounded-md border p-4 text-sm text-muted-foreground">
+              <li>Add a Part: text, an image, or a PDF.</li>
+              <li>Check the schema.</li>
+              <li>Click Run.</li>
+            </ol>
+          ) : (
+            <div className="min-h-0 flex-1 overflow-hidden rounded-md border">
+              <CodeMirror
+                value={shown}
+                height="100%"
+                extensions={[json(), runKeys]}
+                theme={oneDark}
+                {...editorProps(true)}
+                className="h-full min-h-0"
+              />
+            </div>
+          )}
         </TabsContent>
         {answers && (
           <TabsContent value="answers" className="mt-0 min-h-0 flex-1 overflow-auto">
@@ -92,9 +127,9 @@ export function ResponsePanel({ state }: { state: RunState }) {
             <CodeMirror
               value={requestPreview}
               height="100%"
-              extensions={[json()]}
+              extensions={[json(), runKeys]}
               theme={oneDark}
-              editable={false}
+              {...editorProps(true)}
               className="h-full min-h-0"
             />
           </div>

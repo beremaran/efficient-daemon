@@ -1,12 +1,7 @@
 // File → base64 helpers and the client-side payload guards agreed in design:
-// 20 MiB per image, base64-inflated total measured against the 30 MiB body cap.
+// 20 MiB per image; the Ask request's size is measured against the 30 MiB body cap.
 
-import {
-  BASE64_INFLATION,
-  MAX_BODY_BYTES,
-  MAX_IMAGE_BYTES,
-  type Part,
-} from "@/lib/types";
+import { MAX_BODY_BYTES, MAX_IMAGE_BYTES } from "@/lib/types";
 
 /** Reads a File as base64 (without the data: prefix). */
 export function fileToBase64(file: File): Promise<string> {
@@ -20,27 +15,6 @@ export function fileToBase64(file: File): Promise<string> {
     reader.onerror = () => reject(reader.error ?? new Error("read failed"));
     reader.readAsDataURL(file);
   });
-}
-
-/** Serialized size of one media value once inside the JSON body. */
-function partBytes(part: Part): number {
-  let media = "";
-  if (part.kind === "image") media = part.image ?? "";
-  if (part.kind === "pdf") media = part.pdf ?? "";
-  if (part.source === "url") return new Blob([media]).size;
-  return new Blob([media]).size * BASE64_INFLATION;
-}
-
-/** Approximate POST /ask body size for the current draft. */
-export function estimateBodyBytes(parts: Part[], schema: string, system: string): number {
-  let total = 500; // envelope, settings fields, headroom
-  for (const part of parts) {
-    if (part.kind === "text") total += new Blob([part.text ?? ""]).size + 40;
-    else total += partBytes(part) + 80;
-  }
-  total += new Blob([system]).size;
-  total += new Blob([schema]).size;
-  return total;
 }
 
 export interface PartGuardResult {
@@ -57,6 +31,38 @@ export function checkImageFile(file: File): PartGuardResult {
     };
   }
   return { ok: true };
+}
+
+/** Reads a picked file for a Part; a size or read failure comes back as a message, not a throw. */
+export async function readPartFile(
+  file: File,
+  enforceImageCap?: boolean,
+): Promise<{ base64: string } | { message: string }> {
+  const guard = enforceImageCap ? checkImageFile(file) : { ok: true, message: undefined };
+  if (!guard.ok) return { message: guard.message as string };
+  try {
+    return { base64: await fileToBase64(file) };
+  } catch {
+    return { message: `Could not read ${file.name}` };
+  }
+}
+
+/** True when a drag carries files. */
+export const dragHasFiles = (dt: Pick<DataTransfer, "types"> | null): boolean => Array.from(dt?.types ?? []).includes("Files");
+
+/** The first image file on the clipboard, if any; pasted text yields none. */
+export const pastedImage = (dt: Pick<DataTransfer, "files"> | null): File | undefined =>
+  Array.from(dt?.files ?? []).find((f) => f.type.startsWith("image/"));
+
+/** Reads a file dropped on an image or PDF Part; a wrong type, size or read failure comes back as a message. */
+export async function readDroppedFile(
+  kind: "image" | "pdf",
+  file: File,
+): Promise<{ base64: string } | { message: string }> {
+  const isImage = file.type.startsWith("image/");
+  const isPdf = file.type === "application/pdf" || file.name.toLowerCase().endsWith(".pdf");
+  if (kind === "image" ? !isImage : !isPdf) return { message: `${file.name} is not ${kind === "image" ? "an image" : "a PDF"}` };
+  return readPartFile(file, kind === "image");
 }
 
 export const MAX_BODY_MB = Math.floor(MAX_BODY_BYTES / (1 << 20));

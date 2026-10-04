@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDown, Play, Square } from "lucide-react";
 
 import { Badge } from "@/components/ui/badge";
@@ -9,13 +9,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { ConnectionPanel } from "@/components/ConnectionPanel";
 import { PartsEditor } from "@/components/PartsEditor";
 import { SchemaPanel } from "@/components/SchemaPanel";
+import { SCHEMA_CARD_ID, SchemaIssuesLink } from "@/components/SchemaIssuesLink";
 import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
-import { buildBody } from "@/lib/codegen";
-import { lintSchema, type LintResult } from "@/lib/lint";
+import { askFromDraft, lintBody, resolveSettings, snapshotDraftForHistory } from "@/lib/ask";
+import { lintSchema, lintView, type LintResult } from "@/lib/lint";
+import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, scrollToResponse, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
+import { newPartId } from "@/lib/parts";
 import { useDebounced, useDraft, useHistory } from "@/lib/store";
-import type { Part, RunRecord, Settings } from "@/lib/types";
+import { errorMessage } from "@/lib/utils";
+import type { Draft, RunRecord, Settings } from "@/lib/types";
 
 const IDLE_STATE: RunState = {
   running: false,
@@ -28,30 +32,43 @@ const IDLE_STATE: RunState = {
 };
 
 export default function App() {
-  const [draft, setDraft] = useDraft();
-  const { history, push, clear } = useHistory();
+  const [draft, setDraft, keepKey, setKeepKey] = useDraft();
+  const { history, saveFailed, push, clear } = useHistory();
+  // The Draft that the last Restore replaced, and the Draft it put in place.
+  const [undo, setUndo] = useState<{ before: Draft; restored: Draft } | null>(null);
   const [serverDefaults, setServerDefaults] = useState<Partial<Settings>>({});
   const [lintResult, setLintResult] = useState<LintResult | null>(null);
   const [linting, setLinting] = useState(false);
+  const [lintedBody, setLintedBody] = useState<string | null>(null);
   const [run, setRun] = useState<RunState>(IDLE_STATE);
+  const [configLoaded, setConfigLoaded] = useState(false);
+  const [connectionOpen, setConnectionOpen] = useState(false);
+  const [connectionDecided, setConnectionDecided] = useState(false);
   const abortController = useRef<AbortController | null>(null);
+  const responseSection = useRef<HTMLElement>(null);
 
-  const debouncedSchema = useDebounced(draft.schema, 300);
-  const debouncedMaxScoreLevels = useDebounced(draft.settings.maxScoreLevels, 300);
-  const effectiveSettings = useMemo(() => {
-    const provider = draft.settings.provider || String(serverDefaults.provider ?? "");
-    // The server's model and base URL belong to its own provider (see resolve).
-    const own = provider === serverDefaults.provider;
-    return {
-      ...draft.settings,
-      provider,
-      model: draft.settings.model.trim() || (own ? String(serverDefaults.model ?? "").trim() : ""),
-      baseURL: draft.settings.baseURL.trim() || (own ? String(serverDefaults.baseURL ?? "").trim() : ""),
-      maxScoreLevels: draft.settings.maxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? ""),
-    };
-  }, [draft.settings, serverDefaults]);
-  const lintMaxScoreLevels =
-    debouncedMaxScoreLevels.trim() || String(serverDefaults.maxScoreLevels ?? "");
+  const effectiveSettings = useMemo(
+    () => resolveSettings(draft.settings, serverDefaults),
+    [draft.settings, serverDefaults],
+  );
+  // Typing in a big Part must not wait on the Ask request, codegen and size
+  // rebuilt from it, so those follow a deferred Draft. Run builds from the live one.
+  const deferredDraft = useDeferredValue(draft);
+  const request = useMemo(
+    () => askFromDraft(deferredDraft, serverDefaults),
+    [deferredDraft, serverDefaults],
+  );
+  // Lint re-runs only when the schema, provider or max score levels change.
+  const lintInput = request.ok ? JSON.stringify(lintBody(request.body)) : null;
+  const lintErrorInput = request.ok ? null : request.error;
+  const lintValues = useMemo<[string | null, string | null]>(
+    () => [lintInput, lintErrorInput],
+    [lintInput, lintErrorInput],
+  );
+  const [lintJSON, lintError] = useDebounced<[string | null, string | null]>(
+    lintValues,
+    300,
+  );
 
   // Server defaults for ghost text; no api-key by design.
   useEffect(() => {
@@ -65,69 +82,106 @@ export default function App() {
           reasoningEffort: cfg["reasoning-effort"] ?? "",
           timeout: prettyDuration(cfg.timeout ?? ""),
           provider: cfg.provider ?? "",
+          temperature: cfg.temperature == null ? "" : String(cfg.temperature),
+          temperatureEnabled: cfg.temperature != null,
+          maxTokens: cfg["max-tokens"] == null ? "" : String(cfg["max-tokens"]),
+          maxTokensEnabled: cfg["max-tokens"] != null,
           maxScoreLevels: String(cfg["max-score-levels"] ?? ""),
         });
       })
-      .catch(() => {});
+      .catch(() => {})
+      .finally(() => setConfigLoaded(true));
   }, []);
 
-  const runLint = useCallback(async (schema: string, provider: string, maxScoreLevels: string) => {
+  // Only the newest lint reply counts; an older one landing late must not replace it.
+  const lintSeq = useRef(0);
+  const runLint = useCallback(async (body: string) => {
+    const seq = ++lintSeq.current;
     setLinting(true);
-    const result = await lintSchema(schema, provider, maxScoreLevels);
+    const result = await lintSchema(body);
+    if (seq !== lintSeq.current) return;
     setLintResult(result);
+    setLintedBody(body);
     setLinting(false);
   }, []);
 
   useEffect(() => {
-    void runLint(debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels);
-  }, [debouncedSchema, effectiveSettings.provider, lintMaxScoreLevels, runLint]);
+    if (lintJSON !== null) void runLint(lintJSON);
+  }, [lintJSON, runLint]);
+  const lint: LintResult | null =
+    lintError !== null ? { valid: false, errors: [lintError], warnings: [] } : lintResult;
 
-  const requestPreview = useMemo(() => {
-    try {
-      return JSON.stringify(buildBody(draft.parts, draft.system, draft.schema, effectiveSettings), null, 2);
-    } catch {
-      return "{}";
-    }
-  }, [draft, effectiveSettings]);
-
-  const lintErrors = lintResult && !linting ? lintResult.errors : [];
+  // A check is pending from the edit until its result lands, including the debounce wait
+  // and the wait for the deferred Draft to catch up with a lint input edit.
+  const { settings: live } = draft;
+  const lintEdited =
+    draft.schema !== deferredDraft.schema ||
+    live.provider !== deferredDraft.settings.provider ||
+    live.maxScoreLevels !== deferredDraft.settings.maxScoreLevels;
+  const checking = linting || lintEdited || (lintInput !== null && lintInput !== lintedBody);
+  const lintErrors = lintView(lint, checking).errors;
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
   const jevjam = effectiveSettings.provider === "jevjam";
-  const canRun =
-    !run.running &&
-    (!!model || jevjam) &&
-    !!baseURL &&
-    draft.parts.length > 0 &&
-    lintErrors.length === 0 &&
-    !!draft.schema.trim() &&
-    !!draft.parts.some((p) =>
-      p.kind === "text" ? (p.text ?? "").trim() : (p.image ?? p.pdf ?? "").trim(),
-    );
+  const blocker = runBlocker({
+    model,
+    baseURL,
+    jevjam,
+    parts: draft.parts,
+    request,
+    lint,
+    checking,
+    lintErrors: lintErrors.length,
+  });
+  const canRun = !run.running && blocker === null;
+
+  // Once the server defaults are known, open the Connection card if it needs input.
+  // Only that first look decides; later edits must not move the card.
+  if (configLoaded && !connectionDecided) {
+    setConnectionDecided(true);
+    setConnectionOpen(connectionMissing({ model, baseURL, jevjam }));
+  }
 
   const runRequest = async () => {
-    let body: unknown;
-    try {
-      body = buildBody(draft.parts, draft.system, draft.schema, effectiveSettings);
-    } catch (err) {
-      setRun({ ...IDLE_STATE, error: `schema is not valid JSON: ${err instanceof Error ? err.message : err}` });
+    const latest = askFromDraft(draft, serverDefaults);
+    if (!latest.ok) {
+      setRun({ ...IDLE_STATE, error: latest.error });
       return;
     }
+    const { body } = latest;
+    // History resolves server defaults now so Restore keeps the request's
+    // effective settings even if the daemon configuration changes later.
+    const historyDraft = snapshotDraftForHistory(draft, body, serverDefaults);
+    const historyModel = historyDraft.settings.model.trim() || "server default";
+    const requestPreview = latest.json;
     const startedAt = Date.now();
     const controller = new AbortController();
     abortController.current = controller;
-    setRun({ ...IDLE_STATE, running: true, requestPreview });
+    setRun({ ...IDLE_STATE, running: true, startedAt, requestPreview });
+    // 1024px is Tailwind's lg, where the layout turns two-column.
+    scrollToResponse(responseSection.current, window.matchMedia("(min-width: 1024px)").matches);
     try {
       const res = await fetch("/ask", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         // jevjam's raw answers come wrapped with the result in the body.
-        body: JSON.stringify(jevjam ? { ...(body as object), answers: true } : body),
+        body: JSON.stringify(jevjam ? { ...body, answers: true } : body),
         signal: controller.signal,
       });
       const latencyHeader = res.headers.get("X-Latency-Ms");
       const latencyMs = latencyHeader ? Number(latencyHeader) : null;
-      let text = await res.text();
+      // Read in chunks so Stop keeps what has arrived.
+      const reader = res.body?.getReader();
+      const decoder = new TextDecoder();
+      let text = "";
+      for (;;) {
+        const chunk = await reader?.read();
+        if (!chunk || chunk.done) break;
+        text += decoder.decode(chunk.value, { stream: true });
+        const partial = text;
+        setRun((r) => ({ ...r, responseText: partial }));
+      }
+      text += decoder.decode();
       let answers: string | null = null;
       if (jevjam && res.ok) {
         const wrapped = safeParse(text) as { result?: unknown; answers?: unknown };
@@ -141,25 +195,25 @@ export default function App() {
         responseText: text,
         answers,
         error: res.ok ? null : text,
-        requestPreview: requestPreview,
+        requestPreview,
       };
       setRun(state);
       push({
         at: startedAt,
         status: res.status,
         latencyMs,
-        model: model || "server default",
-        request: body,
+        model: historyModel,
+        draft: historyDraft,
         response: safeParse(text),
         responseText: text,
         error: res.ok ? null : text,
       });
     } catch (err) {
       if (controller.signal.aborted) {
-        setRun({ ...IDLE_STATE, cancelled: true, requestPreview });
+        setRun((r) => stoppedState(r, Date.now() - startedAt));
         return;
       }
-      const message = err instanceof Error ? err.message : String(err);
+      const message = errorMessage(err);
       setRun({
         running: false,
         status: null,
@@ -167,14 +221,14 @@ export default function App() {
         responseText: "",
         answers: null,
         error: message,
-        requestPreview: requestPreview,
+        requestPreview,
       });
       push({
         at: startedAt,
         status: null,
         latencyMs: null,
-        model: model || "server default",
-        request: body,
+        model: historyModel,
+        draft: historyDraft,
         response: null,
         responseText: "",
         error: message,
@@ -184,28 +238,43 @@ export default function App() {
     }
   };
 
-  const restore = (record: RunRecord) => {
-    const req = record.request as Record<string, unknown>;
-    const settings: Settings = {
-      ...draft.settings,
-      provider: (req.provider as string) ?? "",
-      maxScoreLevels: req["max-score-levels"] !== undefined ? String(req["max-score-levels"]) : "",
-      model: (req.model as string) ?? "",
-      baseURL: (req["base-url"] as string) ?? "",
-      apiKey: (req["api-key"] as string) ?? "",
-      reasoningEffort: (req["reasoning-effort"] as string) ?? "",
-      temperatureEnabled: req.temperature !== undefined,
-      temperature: req.temperature !== undefined ? String(req.temperature) : draft.settings.temperature,
-      maxTokensEnabled: req["max-tokens"] !== undefined,
-      maxTokens: req["max-tokens"] !== undefined ? String(req["max-tokens"]) : draft.settings.maxTokens,
-      timeout: (req.timeout as string) ?? "",
+  // Re-bound each render so the handler sees the latest Draft.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!isRunShortcut(e, canRun)) return;
+      e.preventDefault();
+      void runRequest();
     };
-    setDraft({
-      settings,
-      system: (req.system as string) ?? "",
-      parts: normalizeParts(req.parts),
-      schema: JSON.stringify(req.schema, null, 2),
-    });
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  });
+
+  const runKeys = useRunKeys(() => {
+    if (canRun) void runRequest();
+  });
+
+  const restore = (record: RunRecord) => {
+    const restored = {
+      ...record.draft,
+      // New ids, so a file read still running for a current Part cannot land on a restored one.
+      parts: record.draft.parts.map((p) => ({ ...p, id: newPartId() })),
+      // Send the key only to the connection it was typed for.
+      settings: {
+        ...record.draft.settings,
+        apiKey:
+          record.draft.settings.provider === effectiveSettings.provider &&
+          record.draft.settings.baseURL === effectiveSettings.baseURL
+            ? draft.settings.apiKey
+            : "",
+      },
+    };
+    setUndo({ before: draft, restored });
+    setDraft(restored);
+  };
+  const undoRestore = () => {
+    if (!undo) return;
+    setDraft(undo.before);
+    setUndo(null);
   };
 
   return (
@@ -213,17 +282,25 @@ export default function App() {
       <Header
         canRun={canRun}
         running={run.running}
-        lintIssues={lintIssuesCount(lintResult, linting)}
+        blocker={blocker}
+        lintIssues={lintErrors.length}
         onRun={runRequest}
         onStop={() => abortController.current?.abort()}
       />
       <main className="flex min-h-0 flex-1 flex-col gap-4 overflow-auto p-4 lg:flex-row lg:overflow-hidden">
         <section className="flex w-full shrink-0 flex-col gap-4 lg:w-[460px] lg:overflow-auto lg:pr-1">
           <Card>
-            <details className="group">
-              <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+            <details
+              className="group"
+              open={connectionOpen}
+              onToggle={(e) => setConnectionOpen(e.currentTarget.open)}
+            >
+              <summary className={cardToggleClass}>
                 <CardHeader className="flex-row items-center justify-between pb-4">
                   <CardTitle className="text-sm">Connection & sampling</CardTitle>
+                  <span className="ml-auto truncate text-xs text-muted-foreground group-open:hidden">
+                    {connectionSummary({ model, provider: effectiveSettings.provider })}
+                  </span>
                   <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
                 </CardHeader>
               </summary>
@@ -231,6 +308,8 @@ export default function App() {
                 <ConnectionPanel
                   settings={draft.settings}
                   serverDefaults={serverDefaults}
+                  keepKey={keepKey}
+                  onKeepKeyChange={setKeepKey}
                   onChange={(settings: Settings) => setDraft({ ...draft, settings })}
                 />
               </CardContent>
@@ -240,9 +319,10 @@ export default function App() {
           {!jevjam && (
             <Card>
               <details className="group">
-                <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                <summary className={cardToggleClass}>
                   <CardHeader className="flex-row items-center justify-between pb-4">
                     <CardTitle className="text-sm">System message</CardTitle>
+                    <span className="ml-auto text-xs text-muted-foreground group-open:hidden">{systemSummary(draft.system)}</span>
                     <ChevronDown className="h-4 w-4 text-muted-foreground transition-transform group-open:rotate-180" />
                   </CardHeader>
                 </summary>
@@ -260,34 +340,34 @@ export default function App() {
 
           <Card>
             <CardHeader className="pb-2">
-              <CardTitle className="text-sm">User message parts</CardTitle>
+              <CardTitle className="text-sm">Message parts</CardTitle>
             </CardHeader>
             <CardContent>
               <PartsEditor
-                system={jevjam ? "" : draft.system}
                 parts={draft.parts}
                 onPartsChange={(parts) => setDraft({ ...draft, parts })}
-                schemaText={draft.schema}
+                bytes={request.ok ? request.bytes : null}
               />
             </CardContent>
           </Card>
 
-          <Card>
+          <Card id={SCHEMA_CARD_ID} tabIndex={-1} className="flex flex-1 flex-col outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <CardHeader className="pb-2">
               <CardTitle className="text-sm">Response schema</CardTitle>
             </CardHeader>
-            <CardContent>
+            <CardContent className="flex flex-1 flex-col">
               <SchemaPanel
                 schema={draft.schema}
                 onSchemaChange={(schema) => setDraft({ ...draft, schema })}
-                lint={lintResult}
-                linting={linting}
+                lint={lint}
+                linting={checking}
+                runKeys={runKeys}
               />
             </CardContent>
           </Card>
         </section>
 
-        <section className="flex min-w-0 flex-1 flex-col lg:min-h-0">
+        <section ref={responseSection} className="flex min-w-0 flex-1 flex-col lg:min-h-0">
           <Tabs defaultValue="response" className="flex min-h-0 flex-1 flex-col gap-3">
             <TabsList className="self-start">
               <TabsTrigger value="response">Response</TabsTrigger>
@@ -297,18 +377,20 @@ export default function App() {
             <Card className="flex min-h-0 flex-1 flex-col">
               <CardContent className="flex min-h-0 flex-1 flex-col pt-4">
                 <TabsContent value="response" className="flex min-h-0 flex-1 flex-col">
-                  <ResponsePanel state={run} />
+                  <ResponsePanel state={run} runKeys={runKeys} />
                 </TabsContent>
                 <TabsContent value="codegen" className="flex flex-col">
-                  <CodegenPanel
-                    parts={draft.parts}
-                    system={draft.system}
-                    schema={draft.schema}
-                    settings={effectiveSettings}
-                  />
+                  <CodegenPanel request={request} parts={deferredDraft.parts} schema={deferredDraft.schema} runKeys={runKeys} />
                 </TabsContent>
                 <TabsContent value="history">
-                  <HistoryPanel history={history} onRestore={restore} onClear={clear} />
+                  <HistoryPanel
+                    history={history}
+                    saveFailed={saveFailed}
+                    onRestore={restore}
+                    // Any edit after the Restore makes Undo drop that edit, so it goes away.
+                    onUndo={undo && draft === undo.restored ? undoRestore : undefined}
+                    onClear={clear}
+                  />
                 </TabsContent>
               </CardContent>
             </Card>
@@ -322,12 +404,14 @@ export default function App() {
 function Header({
   canRun,
   running,
+  blocker,
   lintIssues,
   onRun,
   onStop,
 }: {
   canRun: boolean;
   running: boolean;
+  blocker: string | null;
   lintIssues: number;
   onRun: () => void;
   onStop: () => void;
@@ -337,27 +421,26 @@ function Header({
       <span className="font-semibold">efficient-daemon</span>
       <Badge variant="outline">workbench</Badge>
       <span className="flex-1" />
-      {lintIssues > 0 && (
-        <span className="text-xs text-destructive">
-          {lintIssues} schema issue{lintIssues > 1 ? "s" : ""} — fix before running
+      {blocker && !running && (
+        <span id="run-blocker" className="text-xs text-muted-foreground">
+          {blocker}
         </span>
       )}
+      {lintIssues > 0 && <SchemaIssuesLink count={lintIssues} />}
       {running ? (
         <Button variant="destructive" onClick={onStop}>
           <Square fill="currentColor" /> Stop
         </Button>
       ) : (
-        <Button onClick={onRun} disabled={!canRun}>
+        <Button onClick={onRun} disabled={!canRun} aria-describedby={blocker ? "run-blocker" : undefined}>
           <Play /> Run
+          <kbd className="text-xs font-normal opacity-70">
+            {runShortcutHint(/Mac|iPhone|iPad/.test(navigator.platform))}
+          </kbd>
         </Button>
       )}
     </header>
   );
-}
-
-function lintIssuesCount(lint: LintResult | null, linting: boolean): number {
-  if (!lint || linting) return 0;
-  return lint.errors.length;
 }
 
 function safeParse(text: string): unknown {
@@ -366,24 +449,6 @@ function safeParse(text: string): unknown {
   } catch {
     return text;
   }
-}
-
-function normalizeParts(raw: unknown): Part[] {
-  if (!Array.isArray(raw)) return [{ kind: "text", text: "" }];
-  const parts: Part[] = raw.map((p) => {
-    const part = p as Record<string, unknown>;
-    if (part.pdf !== undefined) return { kind: "pdf", pdf: String(part.pdf) };
-    if (part.image !== undefined) {
-      const isURL = /^https?:\/\//.test(String(part.image));
-      return {
-        kind: "image",
-        source: isURL ? "url" : "upload",
-        image: String(part.image),
-      };
-    }
-    return { kind: "text", text: String(part.text ?? "") };
-  });
-  return parts.length ? parts : [{ kind: "text", text: "" }];
 }
 
 function prettyDuration(d: string): string {

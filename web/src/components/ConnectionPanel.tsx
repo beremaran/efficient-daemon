@@ -1,3 +1,5 @@
+import { useId } from "react";
+
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
@@ -9,6 +11,7 @@ import {
 } from "@/components/ui/select";
 import { OptionalNumberField, TextField } from "@/components/fields";
 import { PROVIDERS, REASONING_EFFORTS, type Settings } from "@/lib/types";
+import { maxScoreLevelsError, maxTokensError, temperatureError } from "@/lib/validate";
 
 export interface ServerDefaults {
   model: string;
@@ -30,11 +33,12 @@ function SelectField({
   onChange: (v: string) => void;
   serverDefault: string;
 }) {
+  const id = useId();
   return (
     <div className="flex flex-col gap-1.5">
-      <Label>{label}</Label>
+      <Label htmlFor={id}>{label}</Label>
       <Select value={value} onValueChange={onChange}>
-        <SelectTrigger className="w-full">
+        <SelectTrigger id={id} className="w-full">
           <SelectValue placeholder={serverDefault ? `server default (${serverDefault})` : "server default"} />
         </SelectTrigger>
         <SelectContent>
@@ -53,11 +57,16 @@ export function ConnectionPanel({
   settings,
   onChange,
   serverDefaults,
+  keepKey,
+  onKeepKeyChange,
 }: {
   settings: Settings;
   onChange: (next: Settings) => void;
   serverDefaults: Partial<Settings>;
+  keepKey: boolean;
+  onKeepKeyChange: (keep: boolean) => void;
 }) {
+  const keepId = useId();
   const patch = (p: Partial<Settings>) => onChange({ ...settings, ...p });
   const jevjam = (settings.provider || serverDefaults.provider) === "jevjam";
   return (
@@ -86,12 +95,34 @@ export function ConnectionPanel({
           ? "Base URL is required here or as a server default."
           : "Model and base URL are required here or as server defaults."}
       </p>
-      <TextField
-        label="API key"
-        value={settings.apiKey}
-        onChange={(apiKey) => patch({ apiKey })}
-        placeholder="optional; may be supplied by the server"
-      />
+      <div className="flex items-end gap-2">
+        <TextField
+          className="min-w-0 flex-1"
+          label="API key"
+          value={settings.apiKey}
+          onChange={(apiKey) => patch({ apiKey })}
+          placeholder="optional; may be supplied by the server"
+          type="password"
+          autoComplete="off"
+        />
+        <div className="flex w-40 shrink-0 flex-col gap-1.5">
+          <Label htmlFor={keepId}>Key storage</Label>
+          <Select value={keepKey ? "tab" : "memory"} onValueChange={(v) => onKeepKeyChange(v === "tab")}>
+            <SelectTrigger id={keepId} className="w-full">
+              <SelectValue>{keepKey ? "Keep for this tab" : "Don't save"}</SelectValue>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="memory">Don't save</SelectItem>
+              <SelectItem value="tab">Keep for this tab</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <p className="text-xs text-muted-foreground">
+        {keepKey
+          ? "The key stays in this tab's session storage until you close the tab."
+          : "The key stays in memory only; a reload clears it."}
+      </p>
       <TextField
         label="Timeout"
         value={settings.timeout}
@@ -105,6 +136,7 @@ export function ConnectionPanel({
           onChange={(maxScoreLevels) => patch({ maxScoreLevels })}
           placeholder={serverDefaults.maxScoreLevels ? `server default (${serverDefaults.maxScoreLevels})` : "server default"}
           type="number"
+          error={maxScoreLevelsError(settings.maxScoreLevels)}
         />
       ) : (
         <>
@@ -123,6 +155,7 @@ export function ConnectionPanel({
             onValueChange={(temperature) => patch({ temperature })}
             min={0}
             max={2}
+            error={temperatureError(settings.temperature)}
           />
           <OptionalNumberField
             label="Max tokens"
@@ -131,6 +164,7 @@ export function ConnectionPanel({
             value={settings.maxTokens}
             onValueChange={(maxTokens) => patch({ maxTokens })}
             step={1}
+            error={maxTokensError(settings.maxTokens)}
           />
         </>
       )}
