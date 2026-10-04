@@ -93,6 +93,7 @@ func New(cfg Config) (http.Handler, error) {
 		_, _ = w.Write(spec)
 	})
 	mux.HandleFunc("GET /config", h.handleConfig)
+	mux.HandleFunc("POST /models", h.handleModels)
 	mux.HandleFunc("POST /schema/lint", h.handleLint)
 	mux.HandleFunc("GET /docs", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html; charset=utf-8")

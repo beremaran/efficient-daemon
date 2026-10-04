@@ -14,6 +14,7 @@ import { ResponsePanel, type RunState } from "@/components/ResponsePanel";
 import { CodegenPanel } from "@/components/CodegenPanel";
 import { HistoryPanel } from "@/components/HistoryPanel";
 import { askFromDraft, lintBody, resolveSettings, snapshotDraftForHistory } from "@/lib/ask";
+import { modelsRequest, useModels } from "@/lib/models";
 import { lintSchema, lintView, type LintResult } from "@/lib/lint";
 import { cardToggleClass, connectionMissing, connectionSummary, isRunShortcut, runBlocker, runShortcutHint, scrollToResponse, stoppedState, systemSummary, useRunKeys } from "@/lib/run";
 import { newPartId } from "@/lib/parts";
@@ -123,6 +124,7 @@ export default function App() {
   const model = effectiveSettings.model.trim();
   const baseURL = effectiveSettings.baseURL.trim();
   const jevjam = effectiveSettings.provider === "jevjam";
+  const models = useModels(baseURL ? modelsRequest(draft.settings) : null);
   const blocker = runBlocker({
     model,
     baseURL,
@@ -308,6 +310,8 @@ export default function App() {
                 <ConnectionPanel
                   settings={draft.settings}
                   serverDefaults={serverDefaults}
+                  models={models}
+                  hasBaseURL={!!baseURL}
                   keepKey={keepKey}
                   onKeepKeyChange={setKeepKey}
                   onChange={(settings: Settings) => setDraft({ ...draft, settings })}

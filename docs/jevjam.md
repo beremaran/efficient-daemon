@@ -10,7 +10,7 @@ efficient-daemon ask \
   "We were billed twice for March. Refund it today or we cancel."
 ```
 
-The base URL is the server root; `/v1/systemone` is added for you. `--model` is optional and maps to jevjam's model field (`english`, `julia-1`, `clef-flash`, and so on); without it, jevjam picks one. The API key comes from `--api-key` or `JEVJAM_API_KEY`, never from `OPENAI_API_KEY`. `serve` does not read `JEVJAM_API_KEY`, so it never sends that key to a base URL a request names; set `--api-key` instead.
+The base URL is the server root; `/v1/systemone` is added for you. The workbench lists models from `/v1/models`. `--model` is optional and maps to jevjam's model field (`english`, `julia-1`, `clef-flash`, and so on); without it, jevjam picks one. The API key comes from `--api-key` or `JEVJAM_API_KEY`, never from `OPENAI_API_KEY`. `serve` does not read `JEVJAM_API_KEY`, so it never sends that key to a base URL a request names; set `--api-key` instead.
 
 Each property of the schema becomes one question, and its `description` becomes the question text:
 

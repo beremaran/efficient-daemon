@@ -159,7 +159,8 @@ describe("schema check", () => {
         </Profiler>,
       ),
     );
-    await settle(350);
+    // The model list loads once after its own 400 ms debounce.
+    await settle(600);
     expect(lintCalls).toHaveLength(1);
     await finishLint(0);
 

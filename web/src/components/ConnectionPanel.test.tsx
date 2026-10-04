@@ -2,12 +2,15 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { ConnectionPanel } from "@/components/ConnectionPanel";
+import type { ModelsState } from "@/lib/models";
 import { DEFAULT_SETTINGS } from "@/lib/types";
+
+const NO_MODELS: ModelsState = { models: [], loading: false, error: "" };
 
 describe("ConnectionPanel selects", () => {
   it("links the Provider and Reasoning effort labels to their triggers", () => {
     const html = renderToStaticMarkup(
-      <ConnectionPanel settings={DEFAULT_SETTINGS} onChange={() => {}} serverDefaults={{}} keepKey={false} onKeepKeyChange={() => {}} />,
+      <ConnectionPanel settings={DEFAULT_SETTINGS} onChange={() => {}} serverDefaults={{}} models={NO_MODELS} hasBaseURL keepKey={false} onKeepKeyChange={() => {}} />,
     );
     for (const name of ["Provider", "Reasoning effort"]) {
       const htmlFor = new RegExp(`<label[^>]*for="([^"]*)"[^>]*>${name}</label>`).exec(html)?.[1];
@@ -20,7 +23,7 @@ describe("ConnectionPanel selects", () => {
 describe("ConnectionPanel key storage", () => {
   const render = (keepKey: boolean) =>
     renderToStaticMarkup(
-      <ConnectionPanel settings={DEFAULT_SETTINGS} onChange={() => {}} serverDefaults={{}} keepKey={keepKey} onKeepKeyChange={() => {}} />,
+      <ConnectionPanel settings={DEFAULT_SETTINGS} onChange={() => {}} serverDefaults={{}} models={NO_MODELS} hasBaseURL keepKey={keepKey} onKeepKeyChange={() => {}} />,
     );
 
   it("defaults to Don't save and says the key stays in memory", () => {
@@ -39,7 +42,7 @@ describe("ConnectionPanel key storage", () => {
 describe("ConnectionPanel API key", () => {
   it("hides the key and turns autocomplete off", () => {
     const html = renderToStaticMarkup(
-      <ConnectionPanel settings={DEFAULT_SETTINGS} onChange={() => {}} serverDefaults={{}} keepKey={false} onKeepKeyChange={() => {}} />,
+      <ConnectionPanel settings={DEFAULT_SETTINGS} onChange={() => {}} serverDefaults={{}} models={NO_MODELS} hasBaseURL keepKey={false} onKeepKeyChange={() => {}} />,
     );
     const id = /<label[^>]*for="([^"]*)"[^>]*>API key<\/label>/.exec(html)?.[1];
     expect(id).toBeTruthy();
@@ -56,6 +59,8 @@ describe("ConnectionPanel number fields", () => {
         settings={{ ...DEFAULT_SETTINGS, ...patch }}
         onChange={() => {}}
         serverDefaults={{}}
+        models={NO_MODELS}
+        hasBaseURL
         keepKey={false}
         onKeepKeyChange={() => {}}
       />,
@@ -89,5 +94,27 @@ describe("ConnectionPanel number fields", () => {
     const html = render({ temperatureEnabled: true, temperature: "0.7", maxTokensEnabled: false, maxTokens: "0" });
     expect(html).not.toContain("aria-invalid");
     expect(html).not.toContain("-error");
+  });
+});
+
+describe("ConnectionPanel model", () => {
+  const render = (models: Partial<ModelsState>, props: { settings?: Partial<typeof DEFAULT_SETTINGS>; hasBaseURL?: boolean } = {}) =>
+    renderToStaticMarkup(
+      <ConnectionPanel
+        settings={{ ...DEFAULT_SETTINGS, ...props.settings }}
+        onChange={() => {}}
+        serverDefaults={{}}
+        models={{ ...NO_MODELS, ...models }}
+        hasBaseURL={props.hasBaseURL ?? true}
+        keepKey={false}
+        onKeepKeyChange={() => {}}
+      />,
+    );
+
+  it("says why it has nothing to select", () => {
+    expect(render({}, { hasBaseURL: false })).toContain("Set a base URL to list models.");
+    expect(render({ loading: true })).toContain("Loading models…");
+    expect(render({ error: "HTTP 404" })).toContain("Could not list models: HTTP 404");
+    expect(render({})).toContain("The server lists no models.");
   });
 });
