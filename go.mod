@@ -5,7 +5,7 @@ go 1.27
 require (
 	github.com/getkin/kin-openapi v0.149.0
 	github.com/invopop/jsonschema v0.14.0
-	github.com/openai/openai-go/v3 v3.64.3
+	github.com/openai/openai-go/v3 v3.71.1
 	github.com/santhosh-tekuri/jsonschema/v5 v5.3.1
 	github.com/spf13/cobra v1.10.2
 	gopkg.in/yaml.v3 v3.0.1
